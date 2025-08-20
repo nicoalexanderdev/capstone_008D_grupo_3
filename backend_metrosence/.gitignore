@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.env
+
+# Tools
+.pytest_cache/
+.mypy_cache/
+.coverage
+dist/
+build/
+
+# IDE/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
