@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "front_metrosense",
-    "slug": "front_metrosense",
+    "name": "frontend_metrosence",
+    "slug": "frontend_metrosence",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

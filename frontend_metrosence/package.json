@@ -1,5 +1,5 @@
 {
-  "name": "front_metrosense",
+  "name": "frontend_metrosence",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
