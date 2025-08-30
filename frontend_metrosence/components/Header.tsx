@@ -8,29 +8,30 @@ type Props = {
 
 export function Header({ onReportPress }: Props) {
   return (
-    <View className="bg-black">
-      <View className="px-4 py-3 flex-row items-center justify-between">
-        {/* Logo M + MetroSence */}
+    <View className="bg-[#222222]">
+      {/* barra superior */}
+      <View className="h-14 px-4 flex-row items-center justify-between  ml-[90px]">
+        {/* Izquierda: logo + marca */}
         <View className="flex-row items-center gap-2">
-          {/* Usa tu asset actual como ícono “M” hasta tener el definitivo */}
           <Image
             source={require("../assets/logo_metrosence.png")}
-            style={{ width: 28, height: 28 }}
+            style={{ width: 30, height: 30 }}
             resizeMode="contain"
             accessibilityLabel="Logo MetroSence"
           />
-          <Text className="text-white text-xl font-bold">
+          <Text className="text-white text-[23px] font-bold">
             Metro
             <Text style={{ color: "#D90871" }}>Sence</Text>
           </Text>
         </View>
 
-        {/* Botón Reportar problema */}
+        {/* Derecha: botón alerta */}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Reportar problema"
           onPress={onReportPress}
           hitSlop={10}
+          className="p-1"
         >
           <Ionicons name="alert-circle-outline" size={24} color="white" />
         </Pressable>

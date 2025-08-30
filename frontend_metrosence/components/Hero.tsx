@@ -1,12 +1,16 @@
-import { Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+// app/components/Hero.tsx
+import React from "react";
+import { View, Text } from "react-native";
 
-export function Hero() {
+export default function Hero() {
   return (
-      <SafeAreaView>
-        <View className="items-center justify-center my-10">
-          <Text className="text-4xl">¡Hola!👋☺️ ¿Dónde vamos hoy?</Text>
-        </View>
-      </SafeAreaView>
+    <View className="px-3 pt-4 text-center items-center justify-center">
+      <Text className="text-white text-3xl font-black leading-tight ">
+        ¡Hola! <Text>👋</Text>
+      </Text>
+      <Text className="text-white text-3xl font-black leading-tight">
+        ¿Dónde vamos hoy?
+      </Text>
+    </View>
   );
 }

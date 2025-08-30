@@ -10,7 +10,7 @@ type Props = {
 
 export default function Footer({ onMenuPress, onBackPress, onHomePress }: Props) {
   return (
-    <View className="bg-black">
+    <View className="bg-[#222222]">
       {/* 3 columnas iguales para que la flecha quede EXACTAMENTE al centro */}
       <View className="h-14 flex-row items-center">
         {/* Menú (izquierda) */}

@@ -24,7 +24,7 @@
       "edgeToEdgeEnabled": true
     },
     "web": {
-      "favicon": "./assets/favicon.png",
+      "favicon": "./assets/logo_metrosence.png",
       "bundler": "metro"
     },
     "plugins": [
