@@ -35,8 +35,7 @@ const LINES: MetroLine[] = [
 
 export default function HomeScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const ITEM_GAP = 25; // ← espacio entre botones
-  
+  const ITEM_GAP = 25; // espacio entre botones
 
   return (
     <SafeAreaView className="flex-1 bg-[#2B2A33]">
@@ -52,29 +51,29 @@ export default function HomeScreen() {
           data={LINES}
           keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingTop: 6, paddingBottom: 30 }}
+          contentContainerStyle={{ paddingTop: 10, paddingBottom: 28 }}
           ItemSeparatorComponent={() => <View style={{ height: ITEM_GAP }} />}
-          ListHeaderComponent={<View style={{ height: 3 }} />}
-          ListFooterComponent={<View style={{ height: 30 }} />}
-         renderItem={({ item }) => (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={item.name}
-          onPress={() => { if (item.to) router.push(item.to); }}
-          android_ripple={{ color: "rgba(255,255,255,0.15)" }}
-          hitSlop={10}
-          // 👇 estas 2 clases centran el contenido del botón
-          className="w-full h-12 rounded-2xl items-center justify-center shadow"
-          style={{ backgroundColor: item.color }}
-        >
-          <Text
-            className="text-base font-extrabold text-center"
-            style={{ color: item.textColor ?? "#fff" }}
-            numberOfLines={1}
-          >
-            {item.name}
-          </Text>
-        </Pressable>
+          ListHeaderComponent={<View style={{ height: 2 }} />}
+          ListFooterComponent={<View style={{ height: 2 }} />}
+          renderItem={({ item }) => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={item.name}
+              onPress={() => { if (item.to) router.push(item.to); }}
+              android_ripple={{ color: "rgba(255,255,255,0.15)" }}
+              hitSlop={10}
+              // 👇 centrado vertical y horizontal del contenido del botón
+              className="w-full h-12 rounded-2xl items-center justify-center shadow"
+              style={{ backgroundColor: item.color }}
+            >
+              <Text
+                className="text-base font-extrabold text-center"
+                style={{ color: item.textColor ?? "#fff" }}
+                numberOfLines={1}
+              >
+                {item.name}
+              </Text>
+            </Pressable>
           )}
         />
       </View>
