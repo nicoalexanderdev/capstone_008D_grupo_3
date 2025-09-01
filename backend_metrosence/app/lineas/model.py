@@ -12,8 +12,18 @@ class LineaUpdate(LineaBase):
 
 class Linea(LineaBase):
     id: int
-    #estaciones: List[Estacion] = []
-    #sentidos: List[Sentido] = []
+
+    class Config:
+        from_attributes = True
+
+# Modelo para relaciones (sin importar Estacion)
+class LineaWithEstaciones(Linea):
+    estaciones: List["EstacionBase"] = []  # Usamos string type annotation
+
+# Necesitamos definir EstacionBase aquí para evitar importación circular
+class EstacionBase(BaseModel):
+    id: int
+    name: str
 
     class Config:
         from_attributes = True

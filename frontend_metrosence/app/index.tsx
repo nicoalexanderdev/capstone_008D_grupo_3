@@ -1,5 +1,5 @@
 // app/index.tsx
-import React, { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   SafeAreaView,
   View,
@@ -7,6 +7,7 @@ import {
   FlatList,
   Pressable,
   StatusBar,
+  ActivityIndicator
 } from "react-native";
 import { router, type Href } from "expo-router";
 
@@ -14,42 +15,80 @@ import { Header } from "../components/Header";
 import Hero from "../components/Hero";
 import Footer2 from "../components/Footer2";
 import SlideMenu from "../components/SlideMenu";
+import { getAllLines, Line } from "../lib/lines";
 
-type MetroLine = {
-  id: string;
-  name: string;
-  color: string;
-  textColor?: string;
-  to?: Href; // ruta de destino opcional
-};
-
-const LINES: MetroLine[] = [
-  { id: "l1", name: "Línea 1", color: "#E20E17", to: { pathname: "/sentido", params: { line: "l1" } } },
-  { id: "l2", name: "Línea 2", color: "#FFD100", textColor: "#1b1b1b" },
-  { id: "l3", name: "Línea 3", color: "#6B3B13" },
-  { id: "l4", name: "Línea 4", color: "#0D2CB3" },
-  { id: "l4a", name: "Línea 4A", color: "#2AA6E0" },
-  { id: "l5", name: "Línea 5", color: "#13A56F" },
-  { id: "l6", name: "Línea 6", color: "#8E44AD" },
-];
+// Define el tipo para las líneas
+type MetroLine = Line;
 
 export default function HomeScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [lines, setLines] = useState<MetroLine[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
   const ITEM_GAP = 25; // espacio entre botones
+
+
+  useEffect(() => {
+    const fetchLines = async () => {
+      try {
+        const linesData = await getAllLines();
+        setLines(linesData);
+      } catch (err) {
+        // Maneja el error de tipo unknown
+        if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError("An unknown error occurred");
+        }
+        console.error("Error fetching lines:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLines();
+  }, []);
+
+  const handleLinePress = (line: MetroLine) => {
+    router.push({
+      pathname: "/[linea]/sentidos",
+      params: { 
+        linea: line.id.toString(),
+        lineName: line.name 
+      }
+    });
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView className="flex-1 bg-[#2B2A33] justify-center items-center">
+        <ActivityIndicator size="large" color="#FFFFFF" />
+        <Text className="text-white mt-4">Cargando líneas...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView className="flex-1 bg-[#2B2A33] justify-center items-center">
+        <Text className="text-white text-center">Error al cargar las líneas: {error}</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1 bg-[#2B2A33]">
-      <StatusBar barStyle="light-content" />
       <Header onReportPress={() => {}} />
 
       <Hero />
 
       <View className="flex-1 px-4 pt-3 pb-2">
-        <Text className="text-white/80 font-bold mb-4">Líneas de Metro</Text>
+        <Text className="text-white/80 font-bold mb-4 text-lg">Líneas de Metro</Text>
 
-        <FlatList<MetroLine>
-          data={LINES}
-          keyExtractor={(item) => item.id}
+        <FlatList
+          data={lines}
+          keyExtractor={(item) => item.id.toString()}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingTop: 10, paddingBottom: 28 }}
           ItemSeparatorComponent={() => <View style={{ height: ITEM_GAP }} />}
@@ -59,16 +98,22 @@ export default function HomeScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={item.name}
-              onPress={() => { if (item.to) router.push(item.to); }}
+              onPress={() => handleLinePress(item)}
               android_ripple={{ color: "rgba(255,255,255,0.15)" }}
               hitSlop={10}
-              // 👇 centrado vertical y horizontal del contenido del botón
-              className="w-full h-12 rounded-2xl items-center justify-center shadow"
-              style={{ backgroundColor: item.color }}
+              className="w-full h-12 rounded-2xl items-center justify-center shadow-lg"
+              style={{ 
+                backgroundColor: item.color,
+                shadowColor: item.color,
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.3,
+                shadowRadius: 4,
+                elevation: 5,
+              }}
             >
               <Text
                 className="text-base font-extrabold text-center"
-                style={{ color: item.textColor ?? "#fff" }}
+                style={{ color: item.textColor }}
                 numberOfLines={1}
               >
                 {item.name}

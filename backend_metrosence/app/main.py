@@ -9,7 +9,14 @@ from .entities.admin import Admin
 
 configure_logging(LogLevels.info)
 
-app = FastAPI(title="Metrosence API", version="0.1.0")
+app = FastAPI(
+    title="Metrosence API", 
+    version="0.1.0", 
+    description="API para el sistema de información de Metrosence",
+    openapi_url="/api/v1/openapi.json",
+    docs_url="/api/v1/docs",
+    redoc_url="/api/v1/redoc"
+)
 
 # Ajusta orígenes permitidos (durante dev puedes dejar "*")
 app.add_middleware(
@@ -33,5 +40,5 @@ def health():
 def root():
     return {"message": "Metrosence API up & running 🚀"}
 
-register_routes(app)
+register_routes(app, prefix="/api/v1")
 

@@ -107,7 +107,7 @@ export default function SlideMenu({ visible, onClose }: Props) {
           {/* Encabezado del panel */}
           <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8, marginBottom: 24 }}>
             <Image
-              source={require("../assets/logo_2024.png")}
+              source={require("../assets/logo_metrosence.png")}
               style={{ width: 28, height: 28 }}
               resizeMode="contain"
               accessibilityLabel="Logo MetroSence"

@@ -4,6 +4,7 @@ from typing import List
 from app.database.core import get_db
 from . import service
 from . import model
+from ..auth.service import get_current_admin
 
 router = APIRouter(prefix="/lines", tags=["lines"])
 
@@ -23,13 +24,13 @@ def read_line(linea_id: int, db: Session = Depends(get_db)):
     return db_linea
 
 @router.post("/", response_model=model.Linea, status_code=status.HTTP_201_CREATED)
-def create_line(linea: model.LineaCreate, db: Session = Depends(get_db)):
+def create_line(linea: model.LineaCreate, db: Session = Depends(get_db), current_admin: str = Depends(get_current_admin)):
     return service.create_line(db=db, linea=linea)
 
 @router.put("/{linea_id}", response_model=model.Linea)
-def update_line(linea_id: int, linea: model.LineaUpdate, db: Session = Depends(get_db)):
+def update_line(linea_id: int, linea: model.LineaUpdate, db: Session = Depends(get_db), current_admin: str = Depends(get_current_admin)):
     return service.update_line(db=db, linea_id=linea_id, linea=linea)
 
 @router.delete("/{linea_id}")
-def delete_line(linea_id: int, db: Session = Depends(get_db)):
+def delete_line(linea_id: int, db: Session = Depends(get_db), current_admin: str = Depends(get_current_admin)):
     return service.delete_line(db=db, linea_id=linea_id)
