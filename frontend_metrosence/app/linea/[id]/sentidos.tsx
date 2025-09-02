@@ -9,27 +9,18 @@ import {
   SafeAreaView
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
-import { Header } from "../../components/Header";
-import Footer from "../../components/Footer";
-import SlideMenu from "../../components/SlideMenu";
-import { getSentidosPorLinea } from "../../lib/sentidos";
-import { getLineColor } from "../../lib/lineColors";
-
-// Define el tipo para los sentidos
-type Sentido = {
-  id: number;
-  nombre: string;
-  estacion: {
-    id: number;
-    name: string;
-  };
-};
+import { Header } from "../../../components/Header";
+import Footer from "../../../components/Footer";
+import SlideMenu from "../../../components/SlideMenu";
+import { getSentidosPorLinea, SentidoType } from "../../../lib/sentidos";
+import { getLineColor } from "../../../lib/lineColors";
 
 export default function SentidoScreen() {
-  const { linea, lineName } = useLocalSearchParams();
-  const lineId = linea ? parseInt(linea as string) : null;
+  const { lineId, lineName} = useLocalSearchParams();
   
-  const [sentidos, setSentidos] = useState<Sentido[]>([]);
+  const id = lineId ? parseInt(lineId as string) : null;
+  
+  const [sentidos, setSentidos] = useState<SentidoType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -40,8 +31,8 @@ export default function SentidoScreen() {
   useEffect(() => {
     const fetchSentidos = async () => {
       try {
-        if (lineId) {
-          const sentidosData = await getSentidosPorLinea(lineId);
+        if (id) {
+          const sentidosData = await getSentidosPorLinea(id);
           setSentidos(sentidosData);
         }
       } catch (err) {
@@ -52,16 +43,15 @@ export default function SentidoScreen() {
     };
 
     fetchSentidos();
-  }, [lineId]);
+  }, [id]);
 
-  const handleSentidoPress = (sentido: Sentido) => {
+
+  const handleSentidoPress = (sentido: SentidoType) => {
     router.push({
-      pathname: "/[lineId]/estaciones",
+      pathname: "/linea/[Id]/estaciones",
       params: {
-        lineId: lineId,
+        lineId: sentido.linea_id,
         lineName: lineName,
-        sentidoId: sentido.id,
-        estacionTerminalId: sentido.estacion.id,
         estacionTerminalName: sentido.estacion.name
       }
     });
@@ -85,7 +75,7 @@ export default function SentidoScreen() {
   }
 
   return (
-    <View className="flex-1 bg-[#2B2A33]">
+    <View className="flex-1 bg-neutral-900">
       <Header onReportPress={() => {}} />
 
       <View className="flex-1 px-4 py-3">
@@ -104,13 +94,6 @@ export default function SentidoScreen() {
               className="w-full h-60 rounded-2xl items-center justify-center shadow-lg"
               style={{ backgroundColor: lineColorInfo.color }}
             >
-              <Text
-                className="text-base font-extrabold text-center"
-                style={{ color: lineColorInfo.textColor }}
-                numberOfLines={2}
-              >
-                {item.nombre}
-              </Text>
               <Text
                 className="text-3xl"
                 style={{ color: lineColorInfo.textColor }}

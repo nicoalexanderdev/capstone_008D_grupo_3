@@ -1,18 +1,18 @@
 // lib/sentidos.ts
 import { apiFetch } from './api';
 
-export type Sentido = {
+export type SentidoType = {
   id: number;
-  nombre: string;
+  estacion_id: number;
+  linea_id: number;
   estacion: {
-    id: number;
     name: string;
   };
 };
 
-export async function getSentidosPorLinea(lineaId: number): Promise<Sentido[]> {
+export async function getSentidosPorLinea(lineaId: number): Promise<SentidoType[]> {
   try {
-    const sentidos: Sentido[] = await apiFetch(`/sentidos/linea/${lineaId}`);
+    const sentidos: SentidoType[] = await apiFetch(`/sentidos/linea/${lineaId}`);
     return sentidos;
   } catch (error) {
     console.error("Failed to fetch sentidos:", error);

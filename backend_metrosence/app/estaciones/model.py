@@ -12,6 +12,9 @@ class EstacionCreate(EstacionBase):
 class EstacionUpdate(EstacionBase):
     pass
 
+class EstacionSimpleResponse(EstacionBase):
+    id: int
+
 class Estacion(EstacionBase):
     id: int
     accesos: Optional[List[Acceso]] = []

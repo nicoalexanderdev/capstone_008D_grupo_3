@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
-from ..estaciones.model import EstacionBase as Estacion
+from ..estaciones.model import EstacionSimpleResponse as Estacion
 from ..lineas.model import LineaBase as Linea
 from . import model, service
 from app.database.core import get_db

@@ -2,7 +2,7 @@ import { View, Text, Pressable } from "react-native";
 import React from "react";
 
 type Props = {
-  label: string;
+  label: String;
   onPress?: () => void;
   color?: string;        
   textColor?: string; 

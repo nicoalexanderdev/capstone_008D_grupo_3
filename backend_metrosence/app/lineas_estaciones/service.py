@@ -92,7 +92,7 @@ def obtener_estaciones_por_linea(db: Session, linea_id: int):
     
     # Obtener las estaciones de la línea
     estaciones = (
-        db.query(Estacion)
+        db.query(Estacion.id, Estacion.name)
         .join(estaciones_lineas, Estacion.id == estaciones_lineas.c.estacion_id)
         .filter(estaciones_lineas.c.linea_id == linea_id)
         .all()

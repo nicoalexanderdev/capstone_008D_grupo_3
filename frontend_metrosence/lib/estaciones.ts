@@ -3,7 +3,6 @@ import { apiFetch } from './api';
 export type Estacion = {
   id: number;
   name: string;
-  // Agrega aquí cualquier otro campo que devuelva tu API
 };
 
 export async function getEstacionesPorLinea(lineaId: number): Promise<Estacion[]> {

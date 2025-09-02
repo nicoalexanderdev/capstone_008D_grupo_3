@@ -6,10 +6,13 @@ import {
   Text,
   FlatList,
   Pressable,
-  StatusBar,
-  ActivityIndicator
+  ActivityIndicator,
+  useWindowDimensions,
+  Image,
+  StyleSheet
 } from "react-native";
 import { router, type Href } from "expo-router";
+import { BlurView } from "expo-blur";
 
 import { Header } from "../components/Header";
 import Hero from "../components/Hero";
@@ -25,9 +28,10 @@ export default function HomeScreen() {
   const [lines, setLines] = useState<MetroLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  const ITEM_GAP = 25; // espacio entre botones
+  const { width } = useWindowDimensions();
 
+  const ITEM_GAP = 30; // espacio entre botones
+  const isLargeScreen = width > 768;
 
   useEffect(() => {
     const fetchLines = async () => {
@@ -52,11 +56,11 @@ export default function HomeScreen() {
 
   const handleLinePress = (line: MetroLine) => {
     router.push({
-      pathname: "/[linea]/sentidos",
-      params: { 
-        linea: line.id.toString(),
-        lineName: line.name 
-      }
+      pathname: "/linea/[Id]/sentidos",
+      params: {
+        lineId: line.id.toString(),
+        lineName: line.name,
+      },
     });
   };
 
@@ -72,55 +76,86 @@ export default function HomeScreen() {
   if (error) {
     return (
       <SafeAreaView className="flex-1 bg-[#2B2A33] justify-center items-center">
-        <Text className="text-white text-center">Error al cargar las líneas: {error}</Text>
+        <Text className="text-white text-center">
+          Error al cargar las líneas: {error}
+        </Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-[#2B2A33]">
+    <SafeAreaView className="flex-1 bg-neutral-950">
+
+      {!isLargeScreen && (
+        <View style={styles.backgroundImageContainer}>
+          <Image
+            source={require("../assets/metro-maps.png")}
+            style={styles.backgroundImage}
+            resizeMode="cover"
+            accessibilityLabel="Mapa del Metro de fondo"
+          />
+          <View style={styles.backgroundOverlay} />
+        </View>
+      )}
+      
       <Header onReportPress={() => {}} />
 
       <Hero />
 
-      <View className="flex-1 px-4 pt-3 pb-2">
-        <Text className="text-white/80 font-bold mb-4 text-lg">Líneas de Metro</Text>
+      <View className="flex-1 my-5">
+        <Text className="text-white/80 font-bold mb-4 text-lg px-4">
+          Líneas de Metro
+        </Text>
 
-        <FlatList
-          data={lines}
-          keyExtractor={(item) => item.id.toString()}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingTop: 10, paddingBottom: 28 }}
-          ItemSeparatorComponent={() => <View style={{ height: ITEM_GAP }} />}
-          ListHeaderComponent={<View style={{ height: 2 }} />}
-          ListFooterComponent={<View style={{ height: 2 }} />}
-          renderItem={({ item }) => (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={item.name}
-              onPress={() => handleLinePress(item)}
-              android_ripple={{ color: "rgba(255,255,255,0.15)" }}
-              hitSlop={10}
-              className="w-full h-12 rounded-2xl items-center justify-center shadow-lg"
-              style={{ 
-                backgroundColor: item.color,
-                shadowColor: item.color,
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.3,
-                shadowRadius: 4,
-                elevation: 5,
+        <View className="flex-1">
+          <BlurView
+              intensity={isLargeScreen ? 0 : 30}
+              tint="dark"
+              style={isLargeScreen ? {} : { borderRadius: 16, overflow: "hidden" }}
+            ></BlurView>
+          <View className="flex-1">
+            <FlatList
+              data={lines}
+              keyExtractor={(item) => item.id.toString()}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{
+                paddingHorizontal: 16,
+                paddingBottom: 28,
               }}
-            >
-              <Text
-                className="text-base font-extrabold text-center"
-                style={{ color: item.textColor }}
-                numberOfLines={1}
-              >
-                {item.name}
-              </Text>
-            </Pressable>
-          )}
-        />
+              ItemSeparatorComponent={() => (
+                <View style={{ height: ITEM_GAP }} />
+              )}
+              ListHeaderComponent={<View style={{ height: 2 }} />}
+              ListFooterComponent={<View style={{ height: 2 }} />}
+              renderItem={({ item }) => (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={item.name}
+                  onPress={() => handleLinePress(item)}
+                  android_ripple={{ color: "rgba(255,255,255,0.15)" }}
+                  hitSlop={10}
+                  className="h-12 rounded-2xl items-center justify-center shadow-lg"
+                  style={{
+                    backgroundColor: item.color,
+                    shadowColor: item.color,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 4,
+                    elevation: 5,
+                  }}
+                >
+                  <Text
+                    className="text-base font-extrabold text-center"
+                    style={{ color: item.textColor }}
+                    numberOfLines={1}
+                  >
+                    {item.name}
+                  </Text>
+                </Pressable>
+              )}
+            />
+          </View>
+        </View>
       </View>
 
       <Footer2 onMenuPress={() => setMenuOpen(true)} />
@@ -128,3 +163,19 @@ export default function HomeScreen() {
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  backgroundImageContainer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 0,
+  },
+  backgroundImage: {
+    width: '100%',
+    height: '100%',
+    opacity: 0.4,
+  },
+  backgroundOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(43, 42, 51, 0.7)', // Fondo semi-transparente
+  }
+});

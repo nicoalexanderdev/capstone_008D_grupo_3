@@ -7,28 +7,23 @@ import {
   SafeAreaView 
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
-import { Header } from "../../components/Header";
-import Footer from "../../components/Footer";
-import SlideMenu from "../../components/SlideMenu";
-import StationButton from "../../components/StationButton";
-import { getEstacionesPorLinea, Estacion } from "../../lib/estaciones";
-import { getLineColor } from "../../lib/lineColors"; 
+import { Header } from "../../../components/Header";
+import Footer from "../../../components/Footer";
+import SlideMenu from "../../../components/SlideMenu";
+import StationButton from "../../../components/StationButton";
+import { getEstacionesPorLinea, Estacion } from "../../../lib/estaciones";
+import { getLineColor } from "../../../lib/lineColors"; 
 
 
 export default function StationsScreen() {
   
   const { 
-    linea, 
-    lineName, 
-    sentidoId, 
-    sentidoName, 
-    estacionTerminalId, 
+    lineId, 
+    lineName,
     estacionTerminalName 
   } = useLocalSearchParams();
 
-  console.log(lineName, sentidoName)
-
-  const lineId = linea ? parseInt(linea as string) : null;
+  const id = lineId ? parseInt(lineId as string) : null;
   
   const [stations, setStations] = useState<Estacion[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,8 +35,8 @@ export default function StationsScreen() {
   useEffect(() => {
     const fetchStations = async () => {
       try {
-        if (lineId) {
-          const estaciones = await getEstacionesPorLinea(Number(lineId));
+        if (id) {
+          const estaciones = await getEstacionesPorLinea(id);
           setStations(estaciones);
         }
       } catch (err) {
@@ -52,17 +47,18 @@ export default function StationsScreen() {
     };
 
     fetchStations();
-  }, [lineId]);
+  }, [id]);
 
   const handleStationPress = (station: Estacion) => {
+    if (!station || !station.id) {
+    console.error("Estación inválida:", station);
+    return; // No navegar si la estación no es válida
+  }
     router.push({
-      pathname: "/acceso",
+      pathname: "/estaciones/[id]/accesos",
       params: { 
-        lineId,
+        idParam: station.id,
         lineName,
-        sentidoId,
-        sentidoName,
-        estacionTerminalId,
         estacionTerminalName,
         estacionDestinoId: station.id,
         estacionDestinoName: station.name
@@ -88,7 +84,7 @@ export default function StationsScreen() {
   }
 
   return (
-    <View className="flex-1 bg-[#2B2A33]">
+    <View className="flex-1 bg-neutral-900">
       <Header onReportPress={() => router.push("/report")} />
 
       <ScrollView
@@ -99,7 +95,7 @@ export default function StationsScreen() {
           Estaciones de {lineName}
         </Text>
         <Text className="text-white/70 text-sm mb-6">
-          Dirección: {sentidoName}
+          Dirección: {estacionTerminalName}
         </Text>
 
         {stations.map((station) => (
