@@ -28,7 +28,7 @@ class HttpMetroProvider:
         if "lines" in self.c_lines:
             return self.c_lines["lines"]
 
-        r = await self.client.get("/api/v1/lines/")
+        r = await self.client.get("/api/v1/lineas/")
         r.raise_for_status()
         data = r.json()
 
@@ -36,11 +36,11 @@ class HttpMetroProvider:
 
         if isinstance(data, list):
             for item in data:
-                _id = str(item.get("id"))
-                _name = str(item.get("name") or _id)
-                lines.append(Line(id=_id, name=_name))
+                _id_linea = str(item.get("id_linea"))
+                _name = str(item.get("name") or _id_linea)
+                lines.append(Line(id_linea=_id_linea, name=_name))
         else:
-            raise RuntimeError(f"Formato inesperado en /api/v1/lines/: {type(data)}")
+            raise RuntimeError(f"Formato inesperado en /api/v1/lineas/: {type(data)}")
 
         self.c_lines["lines"] = lines
         return lines
@@ -83,23 +83,12 @@ class HttpMetroProvider:
             for item in data:
                 if not isinstance(item, dict):
                     s = str(item)
-                    stations.append(Station(id=s, name=s))
+                    stations.append(Station(id_estacion=s, name=s))
                     continue
-                sid = str(item.get("id"))
+                sid = str(item.get("id_estacion"))
                 name = str(item.get("name") or item.get("nombre") or sid)
-                stations.append(Station(id=sid, name=name))
+                stations.append(Station(id_estacion=sid, name=name))
 
-        elif isinstance(data, dict):
-            # Soporte por si algún entorno devuelve {"stations":[...]} o similar
-            payload = data.get("stations") or data.get("data") or data.get("items") or []
-            for item in payload:
-                if isinstance(item, dict):
-                    sid = str(item.get("id") or item.get("station_id") or item.get("estacion_id"))
-                    name = str(item.get("name") or item.get("nombre") or sid)
-                    stations.append(Station(id=sid, name=name))
-                else:
-                    s = str(item)
-                    stations.append(Station(id=s, name=s))
         else:
             raise RuntimeError(f"Formato inesperado en: {type(data)}")
 
@@ -107,8 +96,8 @@ class HttpMetroProvider:
         seen = set()
         unique: List[Station] = []
         for s in stations:
-            if s.id not in seen:
-                seen.add(s.id)
+            if s.id_estacion not in seen:
+                seen.add(s.id_estacion)
                 unique.append(s)
         return unique
 

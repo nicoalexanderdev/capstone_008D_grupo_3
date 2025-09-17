@@ -5,7 +5,7 @@ from typing import Dict
 from mcp.server.fastmcp import FastMCP
 from metrosence_flow.core import (
     Flow, list_lines, select_line, list_directions, select_direction,
-    list_stations, select_station, get_selection_summary, start_navigation, reset_flow
+    list_stations, select_station, get_selection_summary, reset_flow
 )
 from metrosence_flow.providers import provider_from_env
 
