@@ -26,7 +26,7 @@ export type DetalleEstacionType = {
 
 export async function getDetallePorEstacion(estacionId: number): Promise<DetalleEstacionType> {
   try {
-    const detallesEstacion: DetalleEstacionType = await apiFetch(`/stations/${estacionId}/detalles`);
+    const detallesEstacion: DetalleEstacionType = await apiFetch(`/estaciones/${estacionId}/detalles`);
     return detallesEstacion;
   } catch (error) {
     console.error("Failed to fetch estaciones:", error);
