@@ -6,7 +6,7 @@ from ..auth.service import get_current_admin
 from . import service
 from . import model
 
-router = APIRouter(prefix="/stations", tags=["Estaciones"])
+router = APIRouter(prefix="/estaciones", tags=["Estaciones"])
 
 @router.get("/", response_model=List[model.Estacion])
 def read_estations(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
