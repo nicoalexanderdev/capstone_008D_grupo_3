@@ -11,7 +11,7 @@ class LineaUpdate(LineaBase):
     pass
 
 class Linea(LineaBase):
-    id: int
+    id_linea: int
 
     class Config:
         from_attributes = True

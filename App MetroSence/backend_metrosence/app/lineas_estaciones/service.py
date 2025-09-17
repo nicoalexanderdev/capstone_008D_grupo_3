@@ -24,8 +24,8 @@ def agregar_estacion_a_linea(db: Session, relacion: model.EstacionLineaCreate):
         )
     
     # Verificar que existen tanto la estación como la línea
-    estacion = db.query(Estacion).filter(Estacion.id == relacion.estacion_id).first()
-    linea = db.query(Linea).filter(Linea.id == relacion.linea_id).first()
+    estacion = db.query(Estacion).filter(Estacion.id_estacion == relacion.estacion_id).first()
+    linea = db.query(Linea).filter(Linea.id_linea == relacion.linea_id).first()
     
     if not estacion:
         raise HTTPException(
@@ -83,7 +83,7 @@ def eliminar_estacion_de_linea(db: Session, relacion: model.EstacionLineaCreate)
 
 def obtener_estaciones_por_linea(db: Session, linea_id: int):
     # Verificar que la línea existe
-    linea = db.query(Linea).filter(Linea.id == linea_id).first()
+    linea = db.query(Linea).filter(Linea.id_linea == linea_id).first()
     if not linea:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -92,8 +92,8 @@ def obtener_estaciones_por_linea(db: Session, linea_id: int):
     
     # Obtener las estaciones de la línea
     estaciones = (
-        db.query(Estacion.id, Estacion.name)
-        .join(estaciones_lineas, Estacion.id == estaciones_lineas.c.estacion_id)
+        db.query(Estacion.id_estacion, Estacion.name)
+        .join(estaciones_lineas, Estacion.id_estacion == estaciones_lineas.c.estacion_id)
         .filter(estaciones_lineas.c.linea_id == linea_id)
         .all()
     )
@@ -102,7 +102,7 @@ def obtener_estaciones_por_linea(db: Session, linea_id: int):
 
 def obtener_lineas_por_estacion(db: Session, estacion_id: int):
     # Verificar que la estación existe
-    estacion = db.query(Estacion).filter(Estacion.id == estacion_id).first()
+    estacion = db.query(Estacion).filter(Estacion.id_estacion == estacion_id).first()
     if not estacion:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -112,7 +112,7 @@ def obtener_lineas_por_estacion(db: Session, estacion_id: int):
     # Obtener las líneas de la estación
     lineas = (
         db.query(Linea)
-        .join(estaciones_lineas, Linea.id == estaciones_lineas.c.linea_id)
+        .join(estaciones_lineas, Linea.id_linea == estaciones_lineas.c.linea_id)
         .filter(estaciones_lineas.c.estacion_id == estacion_id)
         .all()
     )

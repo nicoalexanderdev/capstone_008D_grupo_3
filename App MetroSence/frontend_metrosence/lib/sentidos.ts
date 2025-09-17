@@ -2,7 +2,7 @@
 import { apiFetch } from './api';
 
 export type SentidoType = {
-  id: number;
+  id_sentido: number;
   estacion_id: number;
   linea_id: number;
   estacion: {

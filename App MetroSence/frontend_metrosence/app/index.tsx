@@ -58,7 +58,7 @@ export default function HomeScreen() {
     router.push({
       pathname: "/linea/[Id]/sentidos",
       params: {
-        lineId: line.id.toString(),
+        lineId: line.id_linea.toString(),
         lineName: line.name,
       },
     });
@@ -116,7 +116,7 @@ export default function HomeScreen() {
           <View className="flex-1">
             <FlatList
               data={lines}
-              keyExtractor={(item) => item.id.toString()}
+              keyExtractor={(item) => item.id_linea.toString()}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{
                 paddingHorizontal: 16,

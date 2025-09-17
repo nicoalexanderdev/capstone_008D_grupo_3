@@ -6,7 +6,7 @@ from ..auth.service import get_current_admin
 from . import service
 from . import model
 
-router = APIRouter(prefix="/estations", tags=["estations"])
+router = APIRouter(prefix="/stations", tags=["Estaciones"])
 
 @router.get("/", response_model=List[model.Estacion])
 def read_estations(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
@@ -35,33 +35,10 @@ def update_estation(estacion_id: int, estacion: model.EstacionUpdate, db: Sessio
 def delete_estation(estacion_id: int, db: Session = Depends(get_db), current_admin: str = Depends(get_current_admin)):
     return service.delete_estation(db=db, estacion_id=estacion_id)
 
-@router.get("/{estacion_id}/con-accesos", response_model=model.Estacion)
+@router.get("/{estacion_id}/detalles", response_model=model.EstacionCompleto)
 def read_estacion_con_accesos(estacion_id: int, db: Session = Depends(get_db)):
     db_estacion = service.get_estacion_with_accesos(db, estacion_id=estacion_id)
     if db_estacion is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Estación no encontrada")
     return db_estacion
 
-@router.get("/con-accesos/todas", response_model=List[model.Estacion])
-def read_estaciones_con_accesos(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    estaciones = service.get_estaciones_with_accesos(db, skip=skip, limit=limit)
-    return estaciones
-
-@router.get("/{estacion_id}/con-horario", response_model=model.Estacion)
-def read_estacion_con_horario(estacion_id: int, db: Session = Depends(get_db)):
-    db_estacion = service.get_estacion_with_horario(db, estacion_id=estacion_id)
-    if db_estacion is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Estación no encontrada")
-    return db_estacion
-
-@router.get("/con-horario/todas", response_model=List[model.Estacion])
-def read_estaciones_con_horario(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    estaciones = service.get_estaciones_with_horario(db, skip=skip, limit=limit)
-    return estaciones
-
-@router.get("/{estacion_id}/completa", response_model=model.Estacion)
-def read_estacion_completa(estacion_id: int, db: Session = Depends(get_db)):
-    db_estacion = service.get_estacion_with_all(db, estacion_id=estacion_id)
-    if db_estacion is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Estación no encontrada")
-    return db_estacion

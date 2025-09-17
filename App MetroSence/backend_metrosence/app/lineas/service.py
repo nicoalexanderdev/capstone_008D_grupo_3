@@ -7,7 +7,7 @@ def get_lines(db: Session, skip: int = 0, limit: int = 100):
     return db.query(Linea).offset(skip).limit(limit).all()
 
 def get_line_by_id(db: Session, linea_id: int):
-    return db.query(Linea).filter(Linea.id == linea_id).first()
+    return db.query(Linea).filter(Linea.id_linea == linea_id).first()
 
 def create_line(db: Session, linea: model.LineaCreate):
     db_linea = Linea(name=linea.name)
@@ -17,7 +17,7 @@ def create_line(db: Session, linea: model.LineaCreate):
     return db_linea
 
 def update_line(db: Session, linea_id: int, linea: model.LineaUpdate):
-    db_linea = db.query(Linea).filter(Linea.id == linea_id).first()
+    db_linea = db.query(Linea).filter(Linea.id_linea == linea_id).first()
     if not db_linea:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -30,7 +30,7 @@ def update_line(db: Session, linea_id: int, linea: model.LineaUpdate):
     return db_linea
 
 def delete_line(db: Session, linea_id: int):
-    db_linea = db.query(Linea).filter(Linea.id == linea_id).first()
+    db_linea = db.query(Linea).filter(Linea.id_linea == linea_id).first()
     if not db_linea:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

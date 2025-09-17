@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .database.core import engine, Base
 from .entities.admin import Admin
 
-# comando para levantar app: uv run uvicorn app.main:app --reload --port 8000
+# comando para levantar app: uv run -m uvicorn app.main:app --reload
 
 configure_logging(LogLevels.info)
 

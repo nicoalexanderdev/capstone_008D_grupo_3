@@ -50,17 +50,17 @@ export default function StationsScreen() {
   }, [id]);
 
   const handleStationPress = (station: Estacion) => {
-    if (!station || !station.id) {
+    if (!station || !station.id_estacion) {
     console.error("Estación inválida:", station);
     return; // No navegar si la estación no es válida
   }
     router.push({
       pathname: "/estaciones/[id]/accesos",
       params: { 
-        idParam: station.id,
+        idParam: station.id_estacion,
         lineName,
         estacionTerminalName,
-        estacionDestinoId: station.id,
+        estacionDestinoId: station.id_estacion,
         estacionDestinoName: station.name
       }
     });
@@ -100,7 +100,7 @@ export default function StationsScreen() {
 
         {stations.map((station) => (
           <StationButton
-            key={station.id}
+            key={station.id_estacion}
             label={station.name}
             onPress={() => handleStationPress(station)}
             color={lineColorInfo.color}        

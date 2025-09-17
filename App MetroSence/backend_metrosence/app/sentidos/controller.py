@@ -5,7 +5,7 @@ from . import model, service
 from app.database.core import get_db
 from ..auth.service import get_current_admin
 
-router = APIRouter(prefix="/sentidos", tags=["sentidos"])
+router = APIRouter(prefix="/sentidos", tags=["Sentidos"])
 
 @router.get("/", response_model=List[model.Sentido])
 def read_sentidos(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):

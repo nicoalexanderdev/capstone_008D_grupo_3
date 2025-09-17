@@ -10,7 +10,7 @@ def get_recorridos(db: Session, skip: int = 0, limit: int = 100):
     return db.query(RecorridoEntity).offset(skip).limit(limit).all()
 
 def get_recorrido(db: Session, recorrido_id: int):
-    return db.query(RecorridoEntity).filter(RecorridoEntity.id == recorrido_id).first()
+    return db.query(RecorridoEntity).filter(RecorridoEntity.id_recorrido == recorrido_id).first()
 
 def get_recorrido_por_parametros(db: Session, estacion_id: int, acceso_id: int, direccion_id: int):
     return (
@@ -38,12 +38,12 @@ def get_recorridos_con_relaciones(db: Session, skip: int = 0, limit: int = 100):
 
 def create_recorrido(db: Session, recorrido: model.RecorridoCreate):
     # Verificar que la estación existe
-    estacion = db.query(EstacionEntity).filter(EstacionEntity.id == recorrido.estacion_id).first()
+    estacion = db.query(EstacionEntity).filter(EstacionEntity.id_estacion == recorrido.estacion_id).first()
     if not estacion:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Estación no encontrada")
     
     # Verificar que el acceso existe
-    acceso = db.query(AccesoEntity).filter(AccesoEntity.id == recorrido.acceso_id).first()
+    acceso = db.query(AccesoEntity).filter(AccesoEntity.id_acceso == recorrido.acceso_id).first()
     if not acceso:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Acceso no encontrado")
     
@@ -55,7 +55,7 @@ def create_recorrido(db: Session, recorrido: model.RecorridoCreate):
         )
     
     # Verificar que la dirección existe
-    direccion = db.query(SentidoEntity).filter(SentidoEntity.id == recorrido.direccion_id).first()
+    direccion = db.query(SentidoEntity).filter(SentidoEntity.id_sentido == recorrido.direccion_id).first()
     if not direccion:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dirección no encontrada")
     
@@ -93,19 +93,19 @@ def create_recorrido(db: Session, recorrido: model.RecorridoCreate):
     return db_recorrido
 
 def update_recorrido(db: Session, recorrido_id: int, recorrido: model.RecorridoUpdate):
-    db_recorrido = db.query(RecorridoEntity).filter(RecorridoEntity.id == recorrido_id).first()
+    db_recorrido = db.query(RecorridoEntity).filter(RecorridoEntity.id_recorrido == recorrido_id).first()
     if not db_recorrido:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recorrido no encontrado")
     
     # Verificar que la estación existe si se cambia
     if recorrido.estacion_id != db_recorrido.estacion_id:
-        estacion = db.query(EstacionEntity).filter(EstacionEntity.id == recorrido.estacion_id).first()
+        estacion = db.query(EstacionEntity).filter(EstacionEntity.id_estacion == recorrido.estacion_id).first()
         if not estacion:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Estación no encontrada")
     
     # Verificar que el acceso existe si se cambia
     if recorrido.acceso_id != db_recorrido.acceso_id:
-        acceso = db.query(AccesoEntity).filter(AccesoEntity.id == recorrido.acceso_id).first()
+        acceso = db.query(AccesoEntity).filter(AccesoEntity.id_acceso == recorrido.acceso_id).first()
         if not acceso:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Acceso no encontrado")
         
@@ -118,7 +118,7 @@ def update_recorrido(db: Session, recorrido_id: int, recorrido: model.RecorridoU
     
     # Verificar que la dirección existe si se cambia
     if recorrido.direccion_id != db_recorrido.direccion_id:
-        direccion = db.query(SentidoEntity).filter(SentidoEntity.id == recorrido.direccion_id).first()
+        direccion = db.query(SentidoEntity).filter(SentidoEntity.id_sentido == recorrido.direccion_id).first()
         if not direccion:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dirección no encontrada")
         
@@ -156,7 +156,7 @@ def update_recorrido(db: Session, recorrido_id: int, recorrido: model.RecorridoU
     return db_recorrido
 
 def delete_recorrido(db: Session, recorrido_id: int):
-    db_recorrido = db.query(RecorridoEntity).filter(RecorridoEntity.id == recorrido_id).first()
+    db_recorrido = db.query(RecorridoEntity).filter(RecorridoEntity.id_recorrido == recorrido_id).first()
     if not db_recorrido:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recorrido no encontrado")
     db.delete(db_recorrido)

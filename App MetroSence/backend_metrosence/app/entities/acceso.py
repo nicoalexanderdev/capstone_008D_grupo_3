@@ -3,10 +3,10 @@ from sqlalchemy.orm import relationship
 from ..database.core import Base
 
 class Acceso(Base):
-    __tablename__ = "accesos"
+    __tablename__ = "acceso"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    estacion_id = Column(BigInteger, ForeignKey('estaciones.id', ondelete="CASCADE"), nullable=False)
+    id_acceso = Column(BigInteger, primary_key=True, autoincrement=True)
+    estacion_id = Column(BigInteger, ForeignKey('estacion.id_estacion', ondelete="CASCADE"), nullable=False)
     letra = Column(String, nullable=False, unique=False)
     direccion = Column(String, nullable=False, unique=False)
 

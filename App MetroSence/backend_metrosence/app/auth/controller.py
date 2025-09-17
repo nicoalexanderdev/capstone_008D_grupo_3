@@ -9,7 +9,7 @@ from ..rate_limiter import limiter
 
 router = APIRouter(
     prefix='/auth',
-    tags=['auth']
+    tags=['Autenticación']
 )
 
 

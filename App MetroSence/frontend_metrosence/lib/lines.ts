@@ -3,7 +3,7 @@ import { apiFetch } from './api';
 import { getLineColor } from './lineColors';
 
 export type Line = {
-  id: number;
+  id_linea: number;
   name: string;
   color?: string;
   textColor?: string;
@@ -17,7 +17,7 @@ export async function getAllLines(): Promise<Line[]> {
       const colorInfo = getLineColor(line.name);
       
       return {
-        id: line.id,
+        id_linea: line.id_linea,
         name: line.name,
         color: colorInfo.color,
         textColor: colorInfo.textColor

@@ -1,7 +1,7 @@
 import { apiFetch } from './api';
 
 export type Estacion = {
-  id: number;
+  id_estacion: number;
   name: string;
 };
 

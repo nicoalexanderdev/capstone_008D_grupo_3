@@ -13,10 +13,16 @@ class EstacionUpdate(EstacionBase):
     pass
 
 class EstacionSimpleResponse(EstacionBase):
-    id: int
+    id_estacion: int
 
 class Estacion(EstacionBase):
-    id: int
+    id_estacion: int
+
+    class Config:
+        from_attributes = True
+
+class EstacionCompleto(EstacionBase):
+    id_estacion: int
     accesos: Optional[List[Acceso]] = []
     horario: Optional[Horario] = None
 
@@ -29,7 +35,7 @@ class EstacionWithLineas(Estacion):
 
 # Necesitamos definir LineaBase aquí para evitar importación circular
 class LineaBase(BaseModel):
-    id: int
+    id_linea: int
     name: str
 
     class Config:

@@ -85,7 +85,7 @@ export default function SentidoScreen() {
 
         <FlatList
           data={sentidos}
-          keyExtractor={(item) => item.id.toString()}
+          keyExtractor={(item) => item.id_sentido.toString()}
           ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
           renderItem={({ item }) => (
             <Pressable

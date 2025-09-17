@@ -4,9 +4,9 @@ from ..entities.association import estaciones_lineas
 from ..database.core import Base
 
 class Linea(Base):
-    __tablename__ = "lineas"
+    __tablename__ = "linea"
 
-    id = Column(BigInteger, primary_key=True)
+    id_linea = Column(BigInteger, primary_key=True)
     name = Column(String, nullable=False, unique=True)
 
     # Relación con estaciones

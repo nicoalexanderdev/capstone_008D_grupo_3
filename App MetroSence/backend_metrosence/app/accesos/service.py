@@ -8,11 +8,11 @@ def get_accesos(db: Session, skip: int = 0, limit: int = 100):
     return db.query(AccesoEntity).offset(skip).limit(limit).all()
 
 def get_acceso(db: Session, acceso_id: int):
-    return db.query(AccesoEntity).filter(AccesoEntity.id == acceso_id).first()
+    return db.query(AccesoEntity).filter(AccesoEntity.id_acceso == acceso_id).first()
 
 def get_accesos_por_estacion(db: Session, estacion_id: int):
     # Verificar que la estación existe
-    estacion = db.query(EstacionEntity).filter(EstacionEntity.id == estacion_id).first()
+    estacion = db.query(EstacionEntity).filter(EstacionEntity.id_estacion == estacion_id).first()
     if not estacion:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Estación no encontrada")
     
@@ -22,7 +22,7 @@ def get_accesos_por_estacion(db: Session, estacion_id: int):
 
 def create_acceso(db: Session, acceso: model.AccesoCreate):
     # Verificar que la estación existe
-    estacion = db.query(EstacionEntity).filter(EstacionEntity.id == acceso.estacion_id).first()
+    estacion = db.query(EstacionEntity).filter(EstacionEntity.id_estacion == acceso.estacion_id).first()
     if not estacion:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Estación no encontrada")
     
@@ -53,13 +53,13 @@ def create_acceso(db: Session, acceso: model.AccesoCreate):
     return db_acceso
 
 def update_acceso(db: Session, acceso_id: int, acceso: model.AccesoUpdate):
-    db_acceso = db.query(AccesoEntity).filter(AccesoEntity.id == acceso_id).first()
+    db_acceso = db.query(AccesoEntity).filter(AccesoEntity.id_acceso == acceso_id).first()
     if not db_acceso:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Acceso no encontrado")
     
     # Verificar que la estación existe si se cambia
     if acceso.estacion_id != db_acceso.estacion_id:
-        estacion = db.query(EstacionEntity).filter(EstacionEntity.id == acceso.estacion_id).first()
+        estacion = db.query(EstacionEntity).filter(EstacionEntity.id_estacion == acceso.estacion_id).first()
         if not estacion:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Estación no encontrada")
     
@@ -89,26 +89,10 @@ def update_acceso(db: Session, acceso_id: int, acceso: model.AccesoUpdate):
     return db_acceso
 
 def delete_acceso(db: Session, acceso_id: int):
-    db_acceso = db.query(AccesoEntity).filter(AccesoEntity.id == acceso_id).first()
+    db_acceso = db.query(AccesoEntity).filter(AccesoEntity.id_acceso == acceso_id).first()
     if not db_acceso:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Acceso no encontrado")
     db.delete(db_acceso)
     db.commit()
     return db_acceso
 
-def get_acceso_with_estacion(db: Session, acceso_id: int):
-    return (
-        db.query(AccesoEntity)
-        .options(joinedload(AccesoEntity.estacion))
-        .filter(AccesoEntity.id == acceso_id)
-        .first()
-    )
-
-def get_accesos_with_estacion(db: Session, skip: int = 0, limit: int = 100):
-    return (
-        db.query(AccesoEntity)
-        .options(joinedload(AccesoEntity.estacion))
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )

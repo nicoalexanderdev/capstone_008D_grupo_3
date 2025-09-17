@@ -1,11 +1,11 @@
-from sqlalchemy import BigInteger, Time, ForeignKey, Column
+from sqlalchemy import Time, Column, Integer
 from sqlalchemy.orm import relationship
 from ..database.core import Base
 
 class Horario(Base):
-    __tablename__ = "horarios"
+    __tablename__ = "horario"
 
-    estacion_id = Column(BigInteger, ForeignKey("estaciones.id", ondelete="CASCADE"), primary_key=True)
+    id_horario = Column(Integer, primary_key=True, autoincrement=True)
     open_weekdays = Column(Time, nullable=False)
     close_weekdays = Column(Time, nullable=False)
     open_saturdays = Column(Time, nullable=False)
@@ -13,7 +13,6 @@ class Horario(Base):
     open_holidays = Column(Time, nullable=False)
     close_holidays = Column(Time, nullable=False)
 
-    # Relación con estación
-    estacion = relationship("Estacion", back_populates="horario")
+    estaciones = relationship("Estacion", back_populates="horario")
 
 

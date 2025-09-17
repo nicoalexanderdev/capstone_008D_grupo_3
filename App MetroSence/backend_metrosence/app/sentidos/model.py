@@ -15,7 +15,7 @@ class SentidoUpdate(SentidoBase):
     pass
 
 class Sentido(SentidoBase):
-    id: int
+    id_sentido: int
     
     class Config:
        from_attributes = True

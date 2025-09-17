@@ -9,11 +9,11 @@ def get_sentidos(db: Session, skip: int = 0, limit: int = 100):
     return db.query(SentidoEntity).offset(skip).limit(limit).all()
 
 def get_sentido(db: Session, sentido_id: int):
-    return db.query(SentidoEntity).filter(SentidoEntity.id == sentido_id).first()
+    return db.query(SentidoEntity).filter(SentidoEntity.id_sentido == sentido_id).first()
 
 def get_sentidos_por_linea(db: Session, linea_id: int):
     # Verificar que la línea existe
-    linea = db.query(LineaEntity).filter(LineaEntity.id == linea_id).first()
+    linea = db.query(LineaEntity).filter(LineaEntity.id_linea == linea_id).first()
     if not linea:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Línea no encontrada")
     
@@ -29,11 +29,11 @@ def get_sentidos_por_linea(db: Session, linea_id: int):
 
 def create_sentido(db: Session, sentido: model.SentidoCreate):
     # Verificar que existan la línea y la estación
-    linea = db.query(LineaEntity).filter(LineaEntity.id == sentido.linea_id).first()
+    linea = db.query(LineaEntity).filter(LineaEntity.id_linea == sentido.linea_id).first()
     if not linea:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Línea no encontrada")
     
-    estacion = db.query(EstacionEntity).filter(EstacionEntity.id == sentido.estacion_id).first()
+    estacion = db.query(EstacionEntity).filter(EstacionEntity.id_estacion == sentido.estacion_id).first()
     if not estacion:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Estación no encontrada")
     

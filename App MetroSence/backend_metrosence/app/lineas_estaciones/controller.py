@@ -8,7 +8,7 @@ from . import model, service
 from app.database.core import get_db
 from ..auth.service import get_current_admin
 
-router = APIRouter(prefix="/lineas-estaciones", tags=["lines-estations"])
+router = APIRouter(prefix="/lineas-estaciones", tags=["Líneas-Estaciones"])
 
 # Agregar una estación a una línea
 @router.post("/", response_model=model.EstacionLinea, status_code=status.HTTP_201_CREATED)

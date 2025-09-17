@@ -4,7 +4,7 @@ from typing import Optional
 class RecorridoBase(BaseModel):
     estacion_id: int
     acceso_id: int
-    direccion_id: int
+    sentido_id: int
     instrucciones: str
 
 class RecorridoCreate(RecorridoBase):
@@ -14,7 +14,7 @@ class RecorridoUpdate(RecorridoBase):
     pass
 
 class Recorrido(RecorridoBase):
-    id: int
+    id_recorrido: int
 
     class Config:
         from_attributes = True

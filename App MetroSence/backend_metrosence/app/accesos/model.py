@@ -13,7 +13,7 @@ class AccesoUpdate(AccesoBase):
     pass
 
 class Acceso(AccesoBase):
-    id: int
+    id_acceso: int
 
     class Config:
         from_attributes = True
