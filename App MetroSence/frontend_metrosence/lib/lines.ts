@@ -11,7 +11,7 @@ export type Line = {
 
 export async function getAllLines(): Promise<Line[]> {
   try {
-    const lines: Line[] = await apiFetch('/lineas?skip=0&limit=10');
+    const lines: Line[] = await apiFetch('/lineas?skip=0&limit=10/');
     
     return lines.map((line) => {
       const colorInfo = getLineColor(line.name);

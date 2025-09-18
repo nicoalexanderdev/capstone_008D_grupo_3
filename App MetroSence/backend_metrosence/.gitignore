@@ -7,6 +7,8 @@ __pycache__/
 venv/
 .env
 
+comandosDocker.txt
+
 # Tools
 .pytest_cache/
 .mypy_cache/
