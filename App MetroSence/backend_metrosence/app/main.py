@@ -18,15 +18,18 @@ app = FastAPI(
     redoc_url="/api/v1/redoc"
 )
 
+app.router.redirect_slashes = False
+
 origins = [
     "http://localhost:8081",  # Para desarrollo 
+    "http://127.0.0.1:8081"
 ]
 
 # Ajusta orígenes permitidos (durante dev puedes dejar "*")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,   # en prod especifica dominios
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

@@ -8,7 +8,7 @@ from ..auth.service import get_current_admin
 
 router = APIRouter(prefix="/lineas", tags=["Líneas"])
 
-@router.get("/", response_model=List[model.Linea])
+@router.get("", response_model=List[model.Linea])
 def read_lines(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     lines = service.get_lines(db, skip=skip, limit=limit)
     return lines
