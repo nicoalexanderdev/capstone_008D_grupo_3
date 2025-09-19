@@ -27,8 +27,6 @@
       "edgeToEdgeEnabled": true,
       "permissions": [
         "RECORD_AUDIO",
-        "android.permission.RECORD_AUDIO",
-        "RECORD_AUDIO",
         "android.permission.RECORD_AUDIO"
       ],
       "package": "com.anonymous.frontend_metrosence"
@@ -47,7 +45,12 @@
       ]
     ],
     "extra": {
-      "EXPO_PUBLIC_AGENT_BASE": "http://127.0.0.1:8787"
-    }
+      "EXPO_PUBLIC_AGENT_BASE": "http://127.0.0.1:8787",
+      "router": {},
+      "eas": {
+        "projectId": "b9683677-541b-4565-8cdb-0992c4156048"
+      }
+    },
+    "owner": "nicolasoses"
   }
 }
