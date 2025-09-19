@@ -6,8 +6,8 @@ import {
   FlatList,
   Pressable,
   ActivityIndicator,
-  SafeAreaView
 } from "react-native";
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from "expo-router";
 import { Header } from "../../../components/Header";
 import Footer from "../../../components/Footer";
