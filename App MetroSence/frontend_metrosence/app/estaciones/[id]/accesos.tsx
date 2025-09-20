@@ -3,8 +3,7 @@ import {
   View,
   Text,
   ScrollView,
-  ActivityIndicator,
-  SafeAreaView,
+  ActivityIndicator
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { Header } from "../../../components/Header";
@@ -77,18 +76,18 @@ export default function AccessScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-[#2B2A33] justify-center items-center">
+      <View className="flex-1 bg-[#2B2A33] justify-center items-center">
         <ActivityIndicator size="large" color="#FFFFFF" />
         <Text className="text-white mt-4">Cargando accesos...</Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (error) {
     return (
-      <SafeAreaView className="flex-1 bg-[#2B2A33] justify-center items-center">
+      <View className="flex-1 bg-[#2B2A33] justify-center items-center">
         <Text className="text-white text-center">Error: {error}</Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
