@@ -1,6 +1,6 @@
 import { Slot } from "expo-router";
-import { SafeAreaView, StatusBar } from "react-native";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { StatusBar } from "react-native";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import "../global.css";
 import React from "react";
 

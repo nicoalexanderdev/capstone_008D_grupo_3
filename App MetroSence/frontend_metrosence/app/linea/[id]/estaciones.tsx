@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { 
-  View, 
-  Text, 
-  ScrollView, 
-  ActivityIndicator, 
-  SafeAreaView 
+import {
+  View,
+  Text,
+  ScrollView,
+  ActivityIndicator
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Header } from "../../../components/Header";
@@ -12,25 +11,22 @@ import Footer from "../../../components/Footer";
 import SlideMenu from "../../../components/SlideMenu";
 import StationButton from "../../../components/StationButton";
 import { getEstacionesPorLinea, Estacion } from "../../../lib/estaciones";
-import { getLineColor } from "../../../lib/lineColors"; 
-
+import { getLineColor } from "../../../lib/lineColors";
+import * as Speech from "expo-speech";
 
 export default function StationsScreen() {
-  
-  const { 
-    lineId, 
-    lineName,
-    estacionTerminalName 
-  } = useLocalSearchParams();
+  const { lineId, lineName, estacionTerminalName } = useLocalSearchParams();
 
   const id = lineId ? parseInt(lineId as string) : null;
-  
+
   const [stations, setStations] = useState<Estacion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const lineColorInfo = lineName ? getLineColor(lineName as string) : { color: "#3A3845", textColor: "#FFFFFF" };
+  const lineColorInfo = lineName
+    ? getLineColor(lineName as string)
+    : { color: "#3A3845", textColor: "#FFFFFF" };
 
   useEffect(() => {
     const fetchStations = async () => {
@@ -38,6 +34,13 @@ export default function StationsScreen() {
         if (id) {
           const estaciones = await getEstacionesPorLinea(id);
           setStations(estaciones);
+          if (estaciones.length > 0) {
+            const estacionNames = estaciones.map((estacion) => estacion.name).join(", ");
+            Speech.speak(
+              `Estaciones de la ${lineName}: ${estacionNames}. Por favor, di el nombre de la estacion que deseas seleccionar.`,
+              { language: "es" }
+            );
+          }
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error desconocido");
@@ -51,35 +54,35 @@ export default function StationsScreen() {
 
   const handleStationPress = (station: Estacion) => {
     if (!station || !station.id_estacion) {
-    console.error("Estación inválida:", station);
-    return; // No navegar si la estación no es válida
-  }
+      console.error("Estación inválida:", station);
+      return; // No navegar si la estación no es válida
+    }
     router.push({
       pathname: "/estaciones/[id]/accesos",
-      params: { 
+      params: {
         idParam: station.id_estacion,
         lineName,
         estacionTerminalName,
         estacionDestinoId: station.id_estacion,
-        estacionDestinoName: station.name
-      }
+        estacionDestinoName: station.name,
+      },
     });
   };
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-[#2B2A33] justify-center items-center">
+      <View className="flex-1 bg-[#2B2A33] justify-center items-center">
         <ActivityIndicator size="large" color="#FFFFFF" />
         <Text className="text-white mt-4">Cargando estaciones...</Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (error) {
     return (
-      <SafeAreaView className="flex-1 bg-[#2B2A33] justify-center items-center">
+      <View className="flex-1 bg-[#2B2A33] justify-center items-center">
         <Text className="text-white text-center">Error: {error}</Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -103,7 +106,7 @@ export default function StationsScreen() {
             key={station.id_estacion}
             label={station.name}
             onPress={() => handleStationPress(station)}
-            color={lineColorInfo.color}        
+            color={lineColorInfo.color}
             textColor={lineColorInfo.textColor}
           />
         ))}

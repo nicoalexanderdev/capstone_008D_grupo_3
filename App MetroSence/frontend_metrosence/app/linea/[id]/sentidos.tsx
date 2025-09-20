@@ -6,7 +6,6 @@ import {
   FlatList,
   Pressable,
   ActivityIndicator,
-  SafeAreaView
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { Header } from "../../../components/Header";
@@ -14,19 +13,22 @@ import Footer from "../../../components/Footer";
 import SlideMenu from "../../../components/SlideMenu";
 import { getSentidosPorLinea, SentidoType } from "../../../lib/sentidos";
 import { getLineColor } from "../../../lib/lineColors";
+import * as Speech from "expo-speech";
 
 export default function SentidoScreen() {
-  const { lineId, lineName} = useLocalSearchParams();
-  
+  const { lineId, lineName } = useLocalSearchParams();
+
   const id = lineId ? parseInt(lineId as string) : null;
-  
+
   const [sentidos, setSentidos] = useState<SentidoType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Obtener el color de la línea actual
-  const lineColorInfo = lineName ? getLineColor(lineName as string) : { color: "#2B2A33", textColor: "#FFFFFF" };
+  const lineColorInfo = lineName
+    ? getLineColor(lineName as string)
+    : { color: "#2B2A33", textColor: "#FFFFFF" };
 
   useEffect(() => {
     const fetchSentidos = async () => {
@@ -34,6 +36,15 @@ export default function SentidoScreen() {
         if (id) {
           const sentidosData = await getSentidosPorLinea(id);
           setSentidos(sentidosData);
+          if (sentidosData.length > 0) {
+            const sentidoNames = sentidosData
+              .map((sentido) => sentido.estacion.name)
+              .join(", ");
+            Speech.speak(
+              `Sentidos disponibles: para la ${lineName},  ${sentidoNames}. Por favor, di el sentido que deseas seleccionar.`,
+              { language: "es" }
+            );
+          }
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error desconocido");
@@ -45,32 +56,31 @@ export default function SentidoScreen() {
     fetchSentidos();
   }, [id]);
 
-
   const handleSentidoPress = (sentido: SentidoType) => {
     router.push({
       pathname: "/linea/[Id]/estaciones",
       params: {
         lineId: sentido.linea_id,
         lineName: lineName,
-        estacionTerminalName: sentido.estacion.name
-      }
+        estacionTerminalName: sentido.estacion.name,
+      },
     });
   };
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-[#2B2A33] justify-center items-center">
+      <View className="flex-1 bg-[#2B2A33] justify-center items-center">
         <ActivityIndicator size="large" color="#FFFFFF" />
         <Text className="text-white mt-4">Cargando sentidos...</Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (error) {
     return (
-      <SafeAreaView className="flex-1 bg-[#2B2A33] justify-center items-center">
+      <View className="flex-1 bg-[#2B2A33] justify-center items-center">
         <Text className="text-white text-center">Error: {error}</Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
@@ -106,7 +116,7 @@ export default function SentidoScreen() {
         />
       </View>
 
-      <Footer 
+      <Footer
         onBackPress={() => router.back()}
         onMenuPress={() => setMenuOpen(true)}
         onHomePress={() => router.replace("/")}

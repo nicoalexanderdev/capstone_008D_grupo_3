@@ -18,6 +18,7 @@ import {
   getDetallePorEstacion,
 } from "../../../lib/accesos";
 import AccessButton from "../../../components/AccessButton";
+import * as Speech from "expo-speech";
 
 // Función para formatear la hora (eliminar segundos si existen)
 const formatTime = (timeString: string) => {
@@ -45,6 +46,15 @@ export default function AccessScreen() {
         if (id) {
           const detalleData = await getDetallePorEstacion(id);
           setDetalle(detalleData);
+          if (detalleData) {
+            const detallesV = detalleData
+            const letraAcceso = detallesV.accesos.map((acceso)=>acceso.letra)
+            const direccionAcceso = detallesV.accesos.map((acceso)=>acceso.direccion)
+            Speech.speak(
+              `Detalles de los accesos. ${letraAcceso}, ${direccionAcceso} Por favor, di el nombre del acceso que deseas seleccionar.`,
+              { language: "es" }
+            );
+          }
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error desconocido");
@@ -85,20 +95,20 @@ export default function AccessScreen() {
   // Verificar si detalle existe y tiene accesos
   if (!detalle || !detalle.accesos || detalle.accesos.length === 0) {
     return (
-    <View className="flex-1 bg-neutral-900">
-      <Header onReportPress={() => router.push("/report")} />
-      
-      <View className="flex-1 justify-center items-center p-4">
-        <Text className="text-white text-center text-lg">
-          No se encontraron accesos para esta estación
-        </Text>
-      </View>
-      
-      <Footer 
-        onBackPress={() => router.back()}
-        onMenuPress={() => setMenuOpen(true)}
-        onHomePress={() => router.replace("/")}
-      />
+      <View className="flex-1 bg-neutral-900">
+        <Header onReportPress={() => router.push("/report")} />
+
+        <View className="flex-1 justify-center items-center p-4">
+          <Text className="text-white text-center text-lg">
+            No se encontraron accesos para esta estación
+          </Text>
+        </View>
+
+        <Footer
+          onBackPress={() => router.back()}
+          onMenuPress={() => setMenuOpen(true)}
+          onHomePress={() => router.replace("/")}
+        />
         <SlideMenu visible={menuOpen} onClose={() => setMenuOpen(false)} />
       </View>
     );

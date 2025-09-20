@@ -1,7 +1,6 @@
 // app/index.tsx
 import { useState, useEffect } from "react";
 import {
-  SafeAreaView,
   View,
   Text,
   FlatList,
@@ -9,10 +8,11 @@ import {
   ActivityIndicator,
   useWindowDimensions,
   Image,
-  StyleSheet
+  StyleSheet,
 } from "react-native";
 import { router, type Href } from "expo-router";
 import { BlurView } from "expo-blur";
+import * as Speech from "expo-speech";
 
 import { Header } from "../components/Header";
 import Hero from "../components/Hero";
@@ -38,6 +38,13 @@ export default function HomeScreen() {
       try {
         const linesData = await getAllLines();
         setLines(linesData);
+        if (linesData.length > 0) {
+          const lineNames = linesData.map((line) => line.name).join(", ");
+          Speech.speak(
+            `¡Hola! ¿Dónde vamos hoy?. Líneas disponibles: ${lineNames}. Por favor, di el nombre de la línea que deseas seleccionar.`,
+            { language: "es" }
+          );
+        }
       } catch (err) {
         // Maneja el error de tipo unknown
         if (err instanceof Error) {
@@ -66,26 +73,25 @@ export default function HomeScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-[#2B2A33] justify-center items-center">
+      <View className="flex-1 bg-[#2B2A33] justify-center items-center">
         <ActivityIndicator size="large" color="#FFFFFF" />
         <Text className="text-white mt-4">Cargando líneas...</Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (error) {
     return (
-      <SafeAreaView className="flex-1 bg-[#2B2A33] justify-center items-center">
+      <View className="flex-1 bg-[#2B2A33] justify-center items-center">
         <Text className="text-white text-center">
           Error al cargar las líneas: {error}
         </Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-neutral-950">
-
+    <View className="flex-1 bg-neutral-950">
       {!isLargeScreen && (
         <View style={styles.backgroundImageContainer}>
           <Image
@@ -97,7 +103,7 @@ export default function HomeScreen() {
           <View style={styles.backgroundOverlay} />
         </View>
       )}
-      
+
       <Header onReportPress={() => {}} />
 
       <Hero />
@@ -109,10 +115,12 @@ export default function HomeScreen() {
 
         <View className="flex-1">
           <BlurView
-              intensity={isLargeScreen ? 0 : 30}
-              tint="dark"
-              style={isLargeScreen ? {} : { borderRadius: 16, overflow: "hidden" }}
-            ></BlurView>
+            intensity={isLargeScreen ? 0 : 30}
+            tint="dark"
+            style={
+              isLargeScreen ? {} : { borderRadius: 16, overflow: "hidden" }
+            }
+          ></BlurView>
           <View className="flex-1">
             <FlatList
               data={lines}
@@ -160,7 +168,7 @@ export default function HomeScreen() {
 
       <Footer2 onMenuPress={() => setMenuOpen(true)} />
       <SlideMenu visible={menuOpen} onClose={() => setMenuOpen(false)} />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -170,12 +178,12 @@ const styles = StyleSheet.create({
     zIndex: 0,
   },
   backgroundImage: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
     opacity: 0.4,
   },
   backgroundOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(43, 42, 51, 0.7)', // Fondo semi-transparente
-  }
+    backgroundColor: "rgba(43, 42, 51, 0.7)", // Fondo semi-transparente
+  },
 });
