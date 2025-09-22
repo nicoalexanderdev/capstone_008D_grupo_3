@@ -1,23 +1,26 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
   ScrollView,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert,
+  Pressable,
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { Header } from "../../../components/Header";
 import Footer from "../../../components/Footer";
 import SlideMenu from "../../../components/SlideMenu";
-import SecondaryButton from "../../../components/SecondaryButton";
-import CounterBar from "../../../components/CounterBar";
 import { getLineColor } from "../../../lib/lineColors";
 import {
   DetalleEstacionType,
   getDetallePorEstacion,
 } from "../../../lib/accesos";
 import AccessButton from "../../../components/AccessButton";
-import * as Speech from "expo-speech";
+import {isGoBack, matchAccessFromUtterance} from "../../../utils/voiceAccesosMatch"
+
+
+import { useVoiceCapture } from "../../../hooks/useVoiceCapture";
 
 // Función para formatear la hora (eliminar segundos si existen)
 const formatTime = (timeString: string) => {
@@ -26,18 +29,45 @@ const formatTime = (timeString: string) => {
 };
 
 export default function AccessScreen() {
-  const { idParam, lineName, estacionDestinoName } = useLocalSearchParams();
+  const { idParam, lineName, estacionDestinoName, estacionTerminalName } =
+    useLocalSearchParams();
 
   const id = idParam ? parseInt(idParam as string) : null;
 
-  const lineColorInfo = lineName
-    ? getLineColor(lineName as string)
-    : { color: "#3A3845", textColor: "#FFFFFF" };
+  const lineColorInfo = useMemo(
+    () =>
+      lineName
+        ? getLineColor(lineName as string)
+        : { color: "#3A3845", textColor: "#FFFFFF" },
+    [lineName]
+  );
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [detalle, setDetalle] = useState<DetalleEstacionType>();
+
+  // ===== Hook de voz =====
+  const { isListening, recognizedText, start, stop, speakThenListen } =
+    useVoiceCapture({
+      lang: "es-CL",
+      onFinalText: (finalText) => {
+        if (!finalText) return;
+        if (isGoBack(finalText)) {
+          router.back();
+          return;
+        }
+        const match = matchAccessFromUtterance(finalText, detalle);
+        if (match) {
+          goConfirm(match.direccion, match.letra);
+        } else {
+          Alert.alert(
+            "No se reconoció el acceso",
+            'Di, por ejemplo: "Acceso A" o "Entrada Independencia". También puedes decir "atrás" para volver.'
+          );
+        }
+      },
+    });
 
   useEffect(() => {
     const fetchDetalles = async () => {
@@ -46,12 +76,16 @@ export default function AccessScreen() {
           const detalleData = await getDetallePorEstacion(id);
           setDetalle(detalleData);
           if (detalleData) {
-            const detallesV = detalleData
-            const letraAcceso = detallesV.accesos.map((acceso)=>acceso.letra)
-            const direccionAcceso = detallesV.accesos.map((acceso)=>acceso.direccion)
-            Speech.speak(
-              `Detalles de los accesos. ${letraAcceso}, ${direccionAcceso} Por favor, di el nombre del acceso que deseas seleccionar.`,
-              { language: "es" }
+            const letras = detalleData.accesos.map((a) => a.letra).join(", ");
+            const direcciones = detalleData.accesos
+              .map((a) => a.direccion)
+              .join(", ");
+            speakThenListen(
+              `Accesos disponibles para ${estacionDestinoName}. Letras: ${letras}. Direcciones: ${
+                direcciones || ""
+              }. Di, por ejemplo: Acceso A o Entrada ${
+                detalleData.accesos[2]?.direccion || "Principal"
+              }. También puedes decir atrás para volver.`
             );
           }
         }
@@ -65,12 +99,15 @@ export default function AccessScreen() {
     fetchDetalles();
   }, [id]);
 
-  console.log(detalle);
-
-  const goConfirm = (accessName: String) => {
+  const goConfirm = (accessName: string, letra: string) => {
     router.push({
       pathname: "/confirmacion",
-      // params: { station: estacionDestinoName, access: accessName, direction },
+      params: {
+        station: String(estacionDestinoName || ""),
+        letra: letra,
+        access: accessName,
+        direction: estacionTerminalName,
+      },
     });
   };
 
@@ -136,7 +173,7 @@ export default function AccessScreen() {
             key={acceso.id_acceso} // Usar id_acceso como key único
             label={acceso.direccion}
             letter={acceso.letra}
-            onPress={() => goConfirm(acceso.direccion)}
+            onPress={() => goConfirm(acceso.direccion, acceso.letra)}
             color={lineColorInfo.color}
             textColor={lineColorInfo.textColor}
           />
@@ -176,15 +213,26 @@ export default function AccessScreen() {
             </View>
           </View>
         )}
-
-        <CounterBar value={0} />
-
-        <SecondaryButton
-          label="ESCANEAR ACCESO"
-          onPress={() => goConfirm("Escaneo")}
-        />
-        <View className="h-16" />
       </ScrollView>
+
+      {/* Botón manual de micrófono + feedback */}
+      <View style={{ paddingVertical: 16 }}>
+        <Pressable
+          onPress={() => (isListening ? stop() : start())}
+          className="h-12 rounded-2xl items-center justify-center shadow-lg bg-slate-300"
+        >
+          <Text>{isListening ? "Detener" : "Grabar"}</Text>
+        </Pressable>
+
+        {Boolean(recognizedText) && (
+          <Text
+            className="text-white px-1 mt-2"
+            accessibilityLabel="Texto reconocido"
+          >
+            {recognizedText}
+          </Text>
+        )}
+      </View>
 
       <Footer
         onBackPress={() => router.back()}

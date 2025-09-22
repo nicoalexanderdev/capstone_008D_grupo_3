@@ -1,58 +1,74 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
-  ScrollView,
-  ActivityIndicator
+  Alert,
+  Pressable,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Header } from "../../../components/Header";
 import Footer from "../../../components/Footer";
 import SlideMenu from "../../../components/SlideMenu";
-import StationButton from "../../../components/StationButton";
-import { getEstacionesPorLinea, Estacion } from "../../../lib/estaciones";
 import { getLineColor } from "../../../lib/lineColors";
-import * as Speech from "expo-speech";
+import { useVoiceCapture } from "../../../hooks/useVoiceCapture";
+import { EstacionesList } from "../../../components/EstacionesList";
+import {
+  matchStationFromUtterance,
+  isGoBack,
+  type EstacionType,
+} from "../../../utils/voiceEstacionMatch";
 
 export default function StationsScreen() {
   const { lineId, lineName, estacionTerminalName } = useLocalSearchParams();
 
   const id = lineId ? parseInt(lineId as string) : null;
 
-  const [stations, setStations] = useState<Estacion[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [cached, setCached] = useState<EstacionType[]>([]);
+  const [announced, setAnnounced] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const lineColorInfo = lineName
-    ? getLineColor(lineName as string)
-    : { color: "#3A3845", textColor: "#FFFFFF" };
+  const lineColorInfo = useMemo(
+    () =>
+      lineName
+        ? getLineColor(lineName as string)
+        : { color: "#3A3845", textColor: "#FFFFFF" },
+    [lineName]
+  );
 
-  useEffect(() => {
-    const fetchStations = async () => {
-      try {
-        if (id) {
-          const estaciones = await getEstacionesPorLinea(id);
-          setStations(estaciones);
-          if (estaciones.length > 0) {
-            const estacionNames = estaciones.map((estacion) => estacion.name).join(", ");
-            Speech.speak(
-              `Estaciones de la ${lineName}: ${estacionNames}. Por favor, di el nombre de la estacion que deseas seleccionar.`,
-              { language: "es" }
-            );
-          }
+  // ===== Hook de voz =====
+  const { isListening, recognizedText, start, stop, speakThenListen } =
+    useVoiceCapture({
+      lang: "es-CL",
+      onFinalText: (finalText) => {
+        if (!finalText) return;
+        if (isGoBack(finalText)) {
+          router.back();
+          return;
         }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error desconocido");
-      } finally {
-        setLoading(false);
-      }
-    };
+        const match = matchStationFromUtterance(finalText, cached);
+        if (match) {
+          handleStationPress(match);
+        } else {
+          Alert.alert(
+            "No se reconoció la estación",
+            'Di, por ejemplo: "Universidad de Chile" o "Hacia Ñuble". También puedes decir "atrás" para volver.'
+          );
+        }
+      },
+    });
 
-    fetchStations();
-  }, [id]);
+  function onDataLoaded(items: EstacionType[]) {
+    setCached(items);
+    if (!announced) {
+      const names = items.map((s) => s.name).join(", ");
+      speakThenListen(
+        `Estaciones de la ${lineName} con dirección hacia ${estacionTerminalName}: ${names}. Puedes decir atrás para volver. Por favor, di el nombre de la estacion que deseas seleccionar.`
+      );
+      setAnnounced(true);
+    }
+  }
 
-  const handleStationPress = (station: Estacion) => {
+  const handleStationPress = (station: EstacionType) => {
     if (!station || !station.id_estacion) {
       console.error("Estación inválida:", station);
       return; // No navegar si la estación no es válida
@@ -69,48 +85,43 @@ export default function StationsScreen() {
     });
   };
 
-  if (loading) {
-    return (
-      <View className="flex-1 bg-[#2B2A33] justify-center items-center">
-        <ActivityIndicator size="large" color="#FFFFFF" />
-        <Text className="text-white mt-4">Cargando estaciones...</Text>
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View className="flex-1 bg-[#2B2A33] justify-center items-center">
-        <Text className="text-white text-center">Error: {error}</Text>
-      </View>
-    );
-  }
-
   return (
     <View className="flex-1 bg-neutral-900">
       <Header onReportPress={() => router.push("/report")} />
 
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <Text className="text-white text-lg mb-3 font-semibold">
-          Estaciones de {lineName}
-        </Text>
-        <Text className="text-white/70 text-sm mb-6">
-          Dirección: {estacionTerminalName}
-        </Text>
+      <Text className="text-white text-3xl mt-5 font-semibold">
+        Estaciones de {lineName}
+      </Text>
+      <Text className="text-white/70 text-lg my-5">
+        Dirección: {estacionTerminalName}
+      </Text>
 
-        {stations.map((station) => (
-          <StationButton
-            key={station.id_estacion}
-            label={station.name}
-            onPress={() => handleStationPress(station)}
-            color={lineColorInfo.color}
-            textColor={lineColorInfo.textColor}
-          />
-        ))}
-      </ScrollView>
+      <EstacionesList
+        lineId={id || 1}
+        onSelect={handleStationPress}
+        onDataLoaded={onDataLoaded}
+        cardColor={lineColorInfo.color}
+        textColor={lineColorInfo.textColor}
+      />
+
+      {/* Botón manual por si el usuario quiere reintentar */}
+      <View style={{ paddingVertical: 12 }}>
+        <Pressable
+          onPress={() => (isListening ? stop() : start())}
+          className="h-12 rounded-2xl items-center justify-center shadow-lg bg-slate-300"
+        >
+          <Text>{isListening ? "Detener" : "Grabar"}</Text>
+        </Pressable>
+
+        {Boolean(recognizedText) && (
+          <Text
+            className="text-white px-1 mt-2"
+            accessibilityLabel="Texto reconocido"
+          >
+            {recognizedText}
+          </Text>
+        )}
+      </View>
 
       <Footer
         onBackPress={() => router.back()}

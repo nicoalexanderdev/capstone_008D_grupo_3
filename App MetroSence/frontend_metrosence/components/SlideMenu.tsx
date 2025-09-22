@@ -10,7 +10,6 @@ import {
   Linking,
   Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 type Props = { visible: boolean; onClose: () => void };
@@ -103,7 +102,7 @@ export default function SlideMenu({ visible, onClose }: Props) {
         }}
         accessibilityRole="menu"
       >
-        <SafeAreaView style={{ flex: 1, paddingHorizontal: 16 }}>
+        <View style={{ flex: 1, paddingHorizontal: 16 }}>
           {/* Encabezado del panel */}
           <View style={{ flexDirection: "row", alignItems: "center", marginTop: 8, marginBottom: 24 }}>
             <Image
@@ -134,7 +133,7 @@ export default function SlideMenu({ visible, onClose }: Props) {
               <Ionicons name="arrow-back" size={28} color="white" />
             </Pressable>
           </View>
-        </SafeAreaView>
+        </View>
       </Animated.View>
     </View>
   );

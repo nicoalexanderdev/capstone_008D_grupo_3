@@ -1,60 +1,66 @@
-// app/[linea]/[sentido].tsx
-import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  FlatList,
-  Pressable,
-  ActivityIndicator,
-} from "react-native";
+import React, { useMemo, useState } from "react";
+import { View, Text, Pressable, Image, StyleSheet } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
+import * as Speech from "expo-speech";
+
 import { Header } from "../../../components/Header";
 import Footer from "../../../components/Footer";
 import SlideMenu from "../../../components/SlideMenu";
-import { getSentidosPorLinea, SentidoType } from "../../../lib/sentidos";
+
+import { SentidosList } from "../../../components/SentidosList";
+import {
+  matchSentidoFromUtterance,
+  isGoBack,
+  type SentidoType,
+} from "../../../utils/voiceSentidoMatch";
 import { getLineColor } from "../../../lib/lineColors";
-import * as Speech from "expo-speech";
+
+// Hook reutilizable de captura de voz
+import { useVoiceCapture } from "../../../hooks/useVoiceCapture";
 
 export default function SentidoScreen() {
-  const { lineId, lineName } = useLocalSearchParams();
-
+  const { lineId, lineName } = useLocalSearchParams<{
+    lineId: string;
+    lineName: string;
+  }>();
   const id = lineId ? parseInt(lineId as string) : null;
 
-  const [sentidos, setSentidos] = useState<SentidoType[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [cached, setCached] = useState<SentidoType[]>([]);
+  const [announced, setAnnounced] = useState(false);
 
-  // Obtener el color de la línea actual
-  const lineColorInfo = lineName
-    ? getLineColor(lineName as string)
-    : { color: "#2B2A33", textColor: "#FFFFFF" };
+  const lineColorInfo = useMemo(
+    () =>
+      lineName
+        ? getLineColor(String(lineName))
+        : { color: "#2B2A33", textColor: "#FFFFFF" },
+    [lineName]
+  );
 
-  useEffect(() => {
-    const fetchSentidos = async () => {
-      try {
-        if (id) {
-          const sentidosData = await getSentidosPorLinea(id);
-          setSentidos(sentidosData);
-          if (sentidosData.length > 0) {
-            const sentidoNames = sentidosData
-              .map((sentido) => sentido.estacion.name)
-              .join(", ");
-            Speech.speak(
-              `Sentidos disponibles: para la ${lineName},  ${sentidoNames}. Por favor, di el sentido que deseas seleccionar.`,
-              { language: "es" }
-            );
-          }
+  const { isListening, recognizedText, start, stop, speakThenListen } =
+    useVoiceCapture({
+      lang: "es-CL",
+      onFinalText: (finalText) => {
+        if (!finalText) return;
+        if (isGoBack(finalText)) {
+          router.back();
+          return;
         }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error desconocido");
-      } finally {
-        setLoading(false);
-      }
-    };
+        const match = matchSentidoFromUtterance(finalText, cached);
+        if (match) handleSentidoPress(match);
+      },
+    });
 
-    fetchSentidos();
-  }, [id]);
+  function onDataLoaded(items: SentidoType[]) {
+    setCached(items);
+    if (!announced) {
+      const names = items.map((s) => s.estacion.name).join(", ");
+      speakThenListen(
+        `Sentidos disponibles para la ${lineName}. Hacia: ${names}. Puedes decir atrás para volver. Di el sentido que deseas seleccionar.`
+      );
+      setAnnounced(true);
+    }
+  }
 
   const handleSentidoPress = (sentido: SentidoType) => {
     router.push({
@@ -67,23 +73,6 @@ export default function SentidoScreen() {
     });
   };
 
-  if (loading) {
-    return (
-      <View className="flex-1 bg-[#2B2A33] justify-center items-center">
-        <ActivityIndicator size="large" color="#FFFFFF" />
-        <Text className="text-white mt-4">Cargando sentidos...</Text>
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View className="flex-1 bg-[#2B2A33] justify-center items-center">
-        <Text className="text-white text-center">Error: {error}</Text>
-      </View>
-    );
-  }
-
   return (
     <View className="flex-1 bg-neutral-900">
       <Header onReportPress={() => {}} />
@@ -93,27 +82,31 @@ export default function SentidoScreen() {
           Sentidos disponibles para {lineName}
         </Text>
 
-        <FlatList
-          data={sentidos}
-          keyExtractor={(item) => item.id_sentido.toString()}
-          ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => handleSentidoPress(item)}
-              android_ripple={{ color: "rgba(255,255,255,0.15)" }}
-              className="w-full h-60 rounded-2xl items-center justify-center shadow-lg"
-              style={{ backgroundColor: lineColorInfo.color }}
-            >
-              <Text
-                className="text-3xl"
-                style={{ color: lineColorInfo.textColor }}
-                numberOfLines={1}
-              >
-                Hacia: {item.estacion.name}
-              </Text>
-            </Pressable>
-          )}
+        <SentidosList
+          lineId={id || 1}
+          onSelect={handleSentidoPress}
+          onDataLoaded={onDataLoaded}
+          cardColor={lineColorInfo.color}
+          textColor={lineColorInfo.textColor}
         />
+
+        <View style={{ paddingVertical: 12 }}>
+          <Pressable
+            onPress={() => (isListening ? stop() : start())}
+            className="h-12 rounded-2xl items-center justify-center shadow-lg bg-slate-300"
+          >
+            <Text>{isListening ? "Detener" : "Grabar"}</Text>
+          </Pressable>
+
+          {Boolean(recognizedText) && (
+            <Text
+              className="text-white px-1 mt-2"
+              accessibilityLabel="Texto reconocido"
+            >
+              {recognizedText}
+            </Text>
+          )}
+        </View>
       </View>
 
       <Footer

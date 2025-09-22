@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "frontend_metrosence",
+    "name": "MetroSence",
     "slug": "frontend_metrosence",
-    "scheme": "frontend_metrosence",
+    "scheme": "MetroSence",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -17,11 +17,17 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Necesitamos tu micrófono para reconocer tu voz."
+      },
+      "icon": {
+        "dark": "./assets/images/ios-dark.png",
+        "light": "./assets/images/ios-light.png",
+        "tinted": "./assets/images/ios-tinted.png"
       }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "monochromeImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
@@ -38,9 +44,31 @@
     "plugins": [
       "expo-router",
       [
-        "@react-native-voice/voice",
+        "expo-speech-recognition", 
         {
-          "microphonePermission": "Necesitamos tu micrófono para reconocer tu voz."
+          "microphonePermission": "MetroSence necesita usar el micrófono.",
+          "speechRecognitionPermission": "MetroSence quiere usar reconocimiento de voz.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "MetroSence necesita usar tu cámara.",
+          "microphonePermission": "MetroSence necesita usar el micrófono.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon-dark.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "dark": {
+            "image": "./assets/images/splash-icon-light.png",
+            "backgroundColor": "#000000"
+          }
         }
       ]
     ],
