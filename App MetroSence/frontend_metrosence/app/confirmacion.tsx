@@ -7,6 +7,7 @@ import Footer from "../components/Footer";
 import SlideMenu from "../components/SlideMenu";
 import SecondaryButton from "../components/SecondaryButton";
 import {isGoBack, isStartAssistant } from "../utils/voiceConfirmacionMatch";
+import * as Speech from "expo-speech";
 
 // Hook de voz reutilizable
 import { useVoiceCapture } from "../hooks/useVoiceCapture";
@@ -27,7 +28,7 @@ export default function ConfirmacionScreen() {
   const destinoLabel = direction ? `Andén - ${direction}` : "Andén - -";
 
   // Hook de voz
-  const { isListening, recognizedText, start, stop, speakThenListen } =
+  const { isListening, recognizedText, start, stop, speakThenListen, interruptTTSAndStart } =
     useVoiceCapture({
       lang: "es-CL",
       onFinalText: (finalText) => {
@@ -56,6 +57,11 @@ export default function ConfirmacionScreen() {
     speakThenListen(msg);
     setAnnounced(true);
   }, [announced, stationLabel, accessLabel, speakThenListen]);
+
+  function goAsistente() {
+    Speech.stop();
+    router.push("/asistente");
+  }
 
   return (
     <View className="flex-1 bg-neutral-900">
@@ -96,14 +102,20 @@ export default function ConfirmacionScreen() {
         <View className="items-center mb-6">
           <SecondaryButton
             label="INICIAR ASISTENTE VIRTUAL"
-            onPress={() => router.push("/asistente")}
+            onPress={goAsistente}
           />
         </View>
 
         {/* Botón manual por si el usuario quiere reintentar */}
         <View style={{ paddingVertical: 100 }}>
           <Pressable
-            onPress={() => (isListening ? stop() : start())}
+            onPress={() => {
+              if (isListening) {
+                stop();
+              } else {
+                interruptTTSAndStart(); 
+              }
+            }}
             className="h-12 rounded-2xl items-center justify-center shadow-lg bg-slate-300"
           >
             <Text>{isListening ? "Detener" : "Grabar"}</Text>
@@ -121,9 +133,9 @@ export default function ConfirmacionScreen() {
       </View>
 
       <Footer
-        onBackPress={() => router.back()}
+        onBackPress={() => {Speech.stop(); router.back();}}
         onMenuPress={() => setMenuOpen(true)}
-        onHomePress={() => router.replace("/")}
+        onHomePress={() => {Speech.stop(); router.replace("/")}}
       />
       <SlideMenu visible={menuOpen} onClose={() => setMenuOpen(false)} />
     </View>

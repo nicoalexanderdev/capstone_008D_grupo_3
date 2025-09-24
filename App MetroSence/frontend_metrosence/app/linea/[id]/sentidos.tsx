@@ -6,6 +6,7 @@ import * as Speech from "expo-speech";
 import { Header } from "../../../components/Header";
 import Footer from "../../../components/Footer";
 import SlideMenu from "../../../components/SlideMenu";
+import { ExpoSpeechRecognitionModule } from "expo-speech-recognition";
 
 import { SentidosList } from "../../../components/SentidosList";
 import {
@@ -19,11 +20,13 @@ import { getLineColor } from "../../../lib/lineColors";
 import { useVoiceCapture } from "../../../hooks/useVoiceCapture";
 
 export default function SentidoScreen() {
-  const { lineId, lineName } = useLocalSearchParams<{
+  const { lineId, lineName, autoVoice } = useLocalSearchParams<{
     lineId: string;
     lineName: string;
+    autoVoice?: string;
   }>();
   const id = lineId ? parseInt(lineId as string) : null;
+  const shouldAutoVoice = autoVoice !== "0";
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [cached, setCached] = useState<SentidoType[]>([]);
@@ -37,41 +40,69 @@ export default function SentidoScreen() {
     [lineName]
   );
 
-  const { isListening, recognizedText, start, stop, speakThenListen } =
-    useVoiceCapture({
-      lang: "es-CL",
-      onFinalText: (finalText) => {
-        if (!finalText) return;
-        if (isGoBack(finalText)) {
-          router.back();
-          return;
-        }
-        const match = matchSentidoFromUtterance(finalText, cached);
-        if (match) handleSentidoPress(match);
-      },
-    });
+  const {
+    isListening,
+    recognizedText,
+    start,
+    stop,
+    speakThenListen,
+    interruptTTSAndStart,
+  } = useVoiceCapture({
+    lang: "es-CL",
+    onFinalText: (finalText) => {
+      if (!finalText) return;
+      if (isGoBack(finalText)) {
+        router.back();
+        return;
+      }
+      const match = matchSentidoFromUtterance(finalText, cached);
+      if (match) handleSentidoPressVoice(match);
+    },
+  });
+
+  // helper para cortar todo antes de navegar
+async function stopVoiceStack() {
+  try { Speech.stop(); } catch {}
+  try { await ExpoSpeechRecognitionModule.stop(); } catch {}
+}
 
   function onDataLoaded(items: SentidoType[]) {
     setCached(items);
     if (!announced) {
       const names = items.map((s) => s.estacion.name).join(", ");
-      speakThenListen(
-        `Sentidos disponibles para la ${lineName}. Hacia: ${names}. Puedes decir atrás para volver. Di el sentido que deseas seleccionar.`
-      );
-      setAnnounced(true);
+        speakThenListen(
+          `Sentidos disponibles para la ${lineName}. Hacia: ${names}. Puedes decir atrás para volver. Di el sentido que deseas seleccionar.`
+        );
+        setAnnounced(true);
     }
   }
 
-  const handleSentidoPress = (sentido: SentidoType) => {
-    router.push({
-      pathname: "/linea/[Id]/estaciones",
-      params: {
-        lineId: sentido.linea_id,
-        lineName: lineName,
-        estacionTerminalName: sentido.estacion.name,
-      },
-    });
-  };
+// ⚠️ separa handlers según origen
+async function handleSentidoPressVoice(sentido: SentidoType) {
+  await stopVoiceStack();
+  router.push({
+    pathname: "/linea/[Id]/estaciones",
+    params: {
+      lineId: sentido.linea_id,
+      lineName,
+      estacionTerminalName: sentido.estacion.name,
+      // NOTA: sin autoVoice -> la pantalla estaciones sí puede hablar/escuchar
+    },
+  });
+}
+
+async function handleSentidoPressTap(sentido: SentidoType) {
+  await stopVoiceStack();
+  router.push({
+    pathname: "/linea/[Id]/estaciones",
+    params: {
+      lineId: sentido.linea_id,
+      lineName,
+      estacionTerminalName: sentido.estacion.name,
+      autoVoice: "0", // ← si vino por tap, NO auto-hables/escuches
+    },
+  });
+}
 
   return (
     <View className="flex-1 bg-neutral-900">
@@ -84,7 +115,7 @@ export default function SentidoScreen() {
 
         <SentidosList
           lineId={id || 1}
-          onSelect={handleSentidoPress}
+          onSelect={handleSentidoPressTap}
           onDataLoaded={onDataLoaded}
           cardColor={lineColorInfo.color}
           textColor={lineColorInfo.textColor}
@@ -92,7 +123,13 @@ export default function SentidoScreen() {
 
         <View style={{ paddingVertical: 12 }}>
           <Pressable
-            onPress={() => (isListening ? stop() : start())}
+            onPress={() => {
+              if (isListening) {
+                stop();
+              } else {
+                interruptTTSAndStart();
+              }
+            }}
             className="h-12 rounded-2xl items-center justify-center shadow-lg bg-slate-300"
           >
             <Text>{isListening ? "Detener" : "Grabar"}</Text>
@@ -110,9 +147,9 @@ export default function SentidoScreen() {
       </View>
 
       <Footer
-        onBackPress={() => router.back()}
+        onBackPress={() => {Speech.stop(); router.back();}}
         onMenuPress={() => setMenuOpen(true)}
-        onHomePress={() => router.replace("/")}
+        onHomePress={() => {Speech.stop(); router.replace("/")}}
       />
 
       <SlideMenu visible={menuOpen} onClose={() => setMenuOpen(false)} />

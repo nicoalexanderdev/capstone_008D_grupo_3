@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -7,41 +7,46 @@ import {
   ActivityIndicator,
 } from "react-native";
 
-import type { Estacion } from "../lib/estaciones"
-import {getEstacionesPorLinea} from "../lib/estaciones"
+import type { Estacion } from "../lib/estaciones";
+import { getEstacionesPorLinea } from "../lib/estaciones";
 
 export function EstacionesList({
-    lineId,
-    onSelect,
-    onDataLoaded,
-    cardColor = "#2B2A33",
-    textColor = "#FFFFFF",
-}: {lineId: number;
-   onSelect: (estacion: Estacion) => void; 
-   onDataLoaded?: (estaciones: Estacion[]) => void;
-     cardColor?: string;
-   textColor?: string;
-}){
+  lineId,
+  onSelect,
+  onDataLoaded,
+  cardColor = "#2B2A33",
+  textColor = "#FFFFFF",
+  skip = 0,
+}: {
+  lineId: number;
+  onSelect: (estacion: Estacion) => void;
+  onDataLoaded?: (estaciones: Estacion[], hasMore: boolean) => void;
+  cardColor?: string;
+  textColor?: string;
+  skip?: number;
+}) {
+  const [items, setItems] = useState<Estacion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-    const [items, setItems] = useState<Estacion[]>([]);
-      const [loading, setLoading] = useState(true);
-      const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    setLoading(true);
+    (async () => {
+      try {
+        const data = await getEstacionesPorLinea(lineId, skip);
+        setItems(data);
+        const hasMore = data.length === 10;
+        onDataLoaded?.(data, hasMore);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unknown error");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [lineId, skip]);
 
-        useEffect(() => {
-          (async () => {
-            try {
-              const data = await getEstacionesPorLinea(lineId);
-              setItems(data);
-              onDataLoaded?.(data);
-            } catch (err) {
-              setError(err instanceof Error ? err.message : "Unknown error");
-            } finally {
-              setLoading(false);
-            }
-          })();
-        }, [lineId]);
 
-    if (loading) {
+  if (loading) {
     return (
       <View className="flex-1 items-center justify-center">
         <ActivityIndicator size="large" />
@@ -50,7 +55,7 @@ export function EstacionesList({
     );
   }
 
-    if (error) {
+  if (error) {
     return (
       <View className="flex-1 items-center justify-center">
         <Text className="text-white text-center">Error: {error}</Text>

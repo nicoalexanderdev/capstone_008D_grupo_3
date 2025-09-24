@@ -81,7 +81,7 @@ def eliminar_estacion_de_linea(db: Session, relacion: model.EstacionLineaCreate)
     db.execute(stmt)
     db.commit()
 
-def obtener_estaciones_por_linea(db: Session, linea_id: int):
+def obtener_estaciones_por_linea(db: Session, linea_id: int, skip: int = 0, limit: int = 10):
     # Verificar que la línea existe
     linea = db.query(Linea).filter(Linea.id_linea == linea_id).first()
     if not linea:
@@ -95,6 +95,8 @@ def obtener_estaciones_por_linea(db: Session, linea_id: int):
         db.query(Estacion.id_estacion, Estacion.name)
         .join(estaciones_lineas, Estacion.id_estacion == estaciones_lineas.c.estacion_id)
         .filter(estaciones_lineas.c.linea_id == linea_id)
+        .offset(skip)
+        .limit(limit)
         .all()
     )
     

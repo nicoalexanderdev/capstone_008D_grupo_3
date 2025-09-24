@@ -9,6 +9,7 @@ import {
 import { BlurView } from "expo-blur";
 import type { MetroLine } from "../utils/voiceLinesMatch";
 import { getAllLines } from "../lib/lines";
+import * as Speech from 'expo-speech';
 
 export function LinesList({
   onSelect,
@@ -30,6 +31,9 @@ export function LinesList({
         const data = await getAllLines();
         setLines(data);
         onDataLoaded?.(data);
+        if (data.length === 0) {
+          Speech.speak("No se encontraron líneas de metro disponibles.");
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error");
       } finally {

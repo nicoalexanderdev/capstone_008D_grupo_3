@@ -17,8 +17,11 @@ import {
   getDetallePorEstacion,
 } from "../../../lib/accesos";
 import AccessButton from "../../../components/AccessButton";
-import {isGoBack, matchAccessFromUtterance} from "../../../utils/voiceAccesosMatch"
-
+import {
+  isGoBack,
+  matchAccessFromUtterance,
+} from "../../../utils/voiceAccesosMatch";
+import * as Speech from "expo-speech";
 
 import { useVoiceCapture } from "../../../hooks/useVoiceCapture";
 
@@ -48,26 +51,32 @@ export default function AccessScreen() {
   const [detalle, setDetalle] = useState<DetalleEstacionType>();
 
   // ===== Hook de voz =====
-  const { isListening, recognizedText, start, stop, speakThenListen } =
-    useVoiceCapture({
-      lang: "es-CL",
-      onFinalText: (finalText) => {
-        if (!finalText) return;
-        if (isGoBack(finalText)) {
-          router.back();
-          return;
-        }
-        const match = matchAccessFromUtterance(finalText, detalle);
-        if (match) {
-          goConfirm(match.direccion, match.letra);
-        } else {
-          Alert.alert(
-            "No se reconoció el acceso",
-            'Di, por ejemplo: "Acceso A" o "Entrada Independencia". También puedes decir "atrás" para volver.'
-          );
-        }
-      },
-    });
+  const {
+    isListening,
+    recognizedText,
+    start,
+    stop,
+    speakThenListen,
+    interruptTTSAndStart,
+  } = useVoiceCapture({
+    lang: "es-CL",
+    onFinalText: (finalText) => {
+      if (!finalText) return;
+      if (isGoBack(finalText)) {
+        router.back();
+        return;
+      }
+      const match = matchAccessFromUtterance(finalText, detalle);
+      if (match) {
+        goConfirm(match.direccion, match.letra);
+      } else {
+        Alert.alert(
+          "No se reconoció el acceso",
+          'Di, por ejemplo: "Acceso A" o "Entrada Independencia". También puedes decir "atrás" para volver.'
+        );
+      }
+    },
+  });
 
   useEffect(() => {
     const fetchDetalles = async () => {
@@ -75,7 +84,7 @@ export default function AccessScreen() {
         if (id) {
           const detalleData = await getDetallePorEstacion(id);
           setDetalle(detalleData);
-          if (detalleData) {
+          if (detalleData.accesos.length > 0) {
             const letras = detalleData.accesos.map((a) => a.letra).join(", ");
             const direcciones = detalleData.accesos
               .map((a) => a.direccion)
@@ -86,6 +95,10 @@ export default function AccessScreen() {
               }. Di, por ejemplo: Acceso A o Entrada ${
                 detalleData.accesos[2]?.direccion || "Principal"
               }. También puedes decir atrás para volver.`
+            );
+          } else {
+            speakThenListen(
+              `No se encontraron accesos para la estación ${estacionDestinoName}. Por favor di atrás para volver.`
             );
           }
         }
@@ -100,6 +113,7 @@ export default function AccessScreen() {
   }, [id]);
 
   const goConfirm = (accessName: string, letra: string) => {
+    Speech.stop();
     router.push({
       pathname: "/confirmacion",
       params: {
@@ -218,7 +232,13 @@ export default function AccessScreen() {
       {/* Botón manual de micrófono + feedback */}
       <View style={{ paddingVertical: 16 }}>
         <Pressable
-          onPress={() => (isListening ? stop() : start())}
+          onPress={() => {
+            if (isListening) {
+              stop();
+            } else {
+              interruptTTSAndStart();
+            }
+          }}
           className="h-12 rounded-2xl items-center justify-center shadow-lg bg-slate-300"
         >
           <Text>{isListening ? "Detener" : "Grabar"}</Text>
@@ -235,9 +255,9 @@ export default function AccessScreen() {
       </View>
 
       <Footer
-        onBackPress={() => router.back()}
+        onBackPress={() => {Speech.stop(); router.back();}}
         onMenuPress={() => setMenuOpen(true)}
-        onHomePress={() => router.replace("/")}
+        onHomePress={() => {Speech.stop(); router.replace("/")}}
       />
       <SlideMenu visible={menuOpen} onClose={() => setMenuOpen(false)} />
     </View>

@@ -130,15 +130,43 @@ export function useVoiceCapture(options?: VoiceCaptureOptions) {
       onDone: () => {
         setTimeout(() => {
           if (!isListening) void start();
-        }, 200);
-      },
-      onStopped: () => {
-        setTimeout(() => {
-          if (!isListening) void start();
-        }, 200);
-      },
+        }, 300);
+      }
     });
   }
 
-  return { isListening, recognizedText, start, stop, speakThenListen };
+  const sleep = (ms: number) => new Promise((r: any) => setTimeout(r, ms));
+
+  async function interruptTTSAndStart() {
+    try {
+      const speaking = await Speech.isSpeakingAsync();
+      if (speaking) {
+        Speech.stop(); // corta el TTS en curso
+        await sleep(200); // deja que libere el audio (clave en iOS/Android)
+      }
+    } catch {}
+    await start(); // tu función existente
+  }
+
+  const autoStartTimerRef = useRef<number | null>(null);
+
+  function cancelSpeakAndAutoStart() {
+    try {
+      Speech.stop();
+    } catch {}
+    if (autoStartTimerRef.current) {
+      clearTimeout(autoStartTimerRef.current);
+      autoStartTimerRef.current = null;
+    }
+  }
+
+  return {
+    isListening,
+    recognizedText,
+    start,
+    stop,
+    speakThenListen,
+    interruptTTSAndStart,
+    cancelSpeakAndAutoStart,
+  };
 }

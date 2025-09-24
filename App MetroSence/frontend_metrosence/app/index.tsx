@@ -18,6 +18,8 @@ import {
   type MetroLine,
 } from "../utils/voiceLinesMatch";
 import { useVoiceCapture } from "../hooks/useVoiceCapture";
+import * as Speech from "expo-speech";
+import { ExpoSpeechRecognitionModule } from "expo-speech-recognition";
 
 export default function HomeScreen() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -25,31 +27,60 @@ export default function HomeScreen() {
   const ITEM_GAP = 30;
   const isLargeScreen = width > 768;
 
-  const { isListening, recognizedText, start, stop, speakThenListen } =
-    useVoiceCapture({
-      lang: "es-CL",
-      onFinalText: (finalText) => {
-        if (!finalText) return;
-        if (!cachedLines.length) return;
-        const match = matchLineFromUtterance(finalText, cachedLines);
-        if (match) handleLinePress(match);
-      },
-    });
+  const {
+    isListening,
+    recognizedText,
+    start,
+    stop,
+    speakThenListen,
+    interruptTTSAndStart,
+  } = useVoiceCapture({
+    lang: "es-CL",
+    onFinalText: (finalText) => {
+      if (!finalText) return;
+      if (!cachedLines.length) return;
+      const match = matchLineFromUtterance(finalText, cachedLines);
+      if (match) handleLinePress(match);
+    },
+  });
 
   const [cachedLines, setCachedLines] = useState<MetroLine[]>([]);
 
-  function handleLinePress(line: MetroLine) {
+  async function handleLinePress(line: MetroLine) {
+    try {
+      // corta cualquier TTS en curso
+      Speech.stop();
+      // corta cualquier reconocimiento en curso
+      await ExpoSpeechRecognitionModule.stop();
+    } catch {}
+
     router.push({
       pathname: "/linea/[Id]/sentidos",
-      params: { lineId: String(line.id_linea), lineName: line.name },
+      params: {
+        lineId: String(line.id_linea),
+        lineName: line.name,
+      },
     });
   }
 
   function onDataLoaded(lines: MetroLine[]) {
     setCachedLines(lines);
     const lineNames = lines.map((l) => l.name).join(", ");
-    speakThenListen(
-      `¡Hola!, Bienvenido a Metro Sence, ¿Dónde vamos hoy?. Líneas de Metro disponibles: ${lineNames}. Por favor, di el nombre de la línea que deseas seleccionar.`
+    Speech.speak(
+      `Hola, Bienvenido a Metro Sence, ¿Dónde vamos hoy?. Líneas de Metro disponibles: ${lineNames}. Por favor, di el nombre de la línea que deseas seleccionar.`,
+      {
+        language: "es",
+        onDone: () => {
+          setTimeout(() => {
+            if (!isListening) void start();
+          }, 200);
+        },
+        onPause: () => {
+          setTimeout(() => {
+            if (!isListening) void start();
+          }, 200);
+        },
+      }
     );
   }
 
@@ -85,7 +116,13 @@ export default function HomeScreen() {
 
         <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
           <Pressable
-            onPress={() => (isListening ? stop() : start())}
+            onPress={() => {
+              if (isListening) {
+                stop();
+              } else {
+                interruptTTSAndStart();
+              }
+            }}
             className="h-12 rounded-2xl items-center justify-center shadow-lg bg-slate-300"
           >
             <Text>{isListening ? "Detener" : "Grabar"}</Text>

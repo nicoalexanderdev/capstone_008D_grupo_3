@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,20 +12,27 @@ import SlideMenu from "../../../components/SlideMenu";
 import { getLineColor } from "../../../lib/lineColors";
 import { useVoiceCapture } from "../../../hooks/useVoiceCapture";
 import { EstacionesList } from "../../../components/EstacionesList";
+import { getAllEstacionesPorLinea } from "../../../lib/estaciones";
 import {
   matchStationFromUtterance,
   isGoBack,
   type EstacionType,
 } from "../../../utils/voiceEstacionMatch";
+import * as Speech from "expo-speech";
 
 export default function StationsScreen() {
   const { lineId, lineName, estacionTerminalName } = useLocalSearchParams();
 
   const id = lineId ? parseInt(lineId as string) : null;
 
+  const [skip, setSkip] = useState(0);
   const [cached, setCached] = useState<EstacionType[]>([]);
+  const [allStations, setAllStations] = useState<EstacionType[]>([]);
+
   const [announced, setAnnounced] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingAllStations, setLoadingAllStations] = useState(true);
 
   const lineColorInfo = useMemo(
     () =>
@@ -35,8 +42,24 @@ export default function StationsScreen() {
     [lineName]
   );
 
+    useEffect(() => {
+    if (id) {
+      setLoadingAllStations(true);
+      (async () => {
+        try {
+          const allStationsData = await getAllEstacionesPorLinea(id);
+          setAllStations(allStationsData);
+        } catch (error) {
+          console.error("Error loading all stations:", error);
+        } finally {
+          setLoadingAllStations(false);
+        }
+      })();
+    }
+  }, [id]);
+
   // ===== Hook de voz =====
-  const { isListening, recognizedText, start, stop, speakThenListen } =
+  const { isListening, recognizedText, start, stop, speakThenListen, interruptTTSAndStart } =
     useVoiceCapture({
       lang: "es-CL",
       onFinalText: (finalText) => {
@@ -45,7 +68,21 @@ export default function StationsScreen() {
           router.back();
           return;
         }
-        const match = matchStationFromUtterance(finalText, cached);
+        if (finalText.toLowerCase() === "más" || finalText.toLowerCase() === "mas") {
+          if (!hasMore) {
+            // Si no hay más estaciones, avisar al usuario
+            Speech.speak("Ya has llegado a la última estación. No hay más estaciones para mostrar.", {
+              language: "es"
+            });
+            return;
+          }
+          const newSkip = skip + 10;
+          setSkip(newSkip);
+          // Reiniciar announced para que se anuncie la nueva lista
+          setAnnounced(false);
+          return;
+        }
+        const match = matchStationFromUtterance(finalText, allStations);
         if (match) {
           handleStationPress(match);
         } else {
@@ -57,18 +94,35 @@ export default function StationsScreen() {
       },
     });
 
-  function onDataLoaded(items: EstacionType[]) {
+  const getCurrentRangeText = () => {
+    const startRange = skip + 1;
+    const endRange = skip + 10;
+    return `estaciones ${startRange} a ${endRange}`;
+  };
+
+  function onDataLoaded(items: EstacionType[], hasMoreItems: boolean) {
     setCached(items);
+    setHasMore(hasMoreItems);
+
     if (!announced) {
       const names = items.map((s) => s.name).join(", ");
+
+      const moreMessage = hasMoreItems 
+        ? 'Di "más" para nombrarte las siguientes 10 estaciones.'
+        : 'Estas son todas las estaciones de la línea.';
+
       speakThenListen(
-        `Estaciones de la ${lineName} con dirección hacia ${estacionTerminalName}: ${names}. Puedes decir atrás para volver. Por favor, di el nombre de la estacion que deseas seleccionar.`
+        `Estaciones de la ${lineName} con dirección hacia ${estacionTerminalName}. 
+        Por favor, di el nombre de la estación que deseas seleccionar, aprieta el botón de grabar si ya sabes la estación en la que estas.
+        Puedes decir atrás para volver.
+        Te nombraré las  ${getCurrentRangeText()}: ${names}. ${moreMessage}.`
       );
       setAnnounced(true);
     }
   }
 
   const handleStationPress = (station: EstacionType) => {
+    Speech.stop();
     if (!station || !station.id_estacion) {
       console.error("Estación inválida:", station);
       return; // No navegar si la estación no es válida
@@ -85,6 +139,22 @@ export default function StationsScreen() {
     });
   };
 
+  useEffect(() => {
+    setSkip(0);
+    setHasMore(true);
+    setAnnounced(false);
+  }, [lineId, estacionTerminalName]);
+
+   // Si estamos cargando todas las estaciones, mostrar un indicador
+  if (loadingAllStations) {
+    return (
+      <View className="flex-1 bg-neutral-900 items-center justify-center">
+        <Text className="text-white text-lg">Cargando estaciones...</Text>
+      </View>
+    );
+  }
+
+
   return (
     <View className="flex-1 bg-neutral-900">
       <Header onReportPress={() => router.push("/report")} />
@@ -96,18 +166,31 @@ export default function StationsScreen() {
         Dirección: {estacionTerminalName}
       </Text>
 
+      {/* Indicador de página actual */}
+      <Text className="text-white/50 text-sm mb-5">
+        Mostrando {getCurrentRangeText()}
+        {!hasMore && " (Últimas estaciones)"}
+      </Text>
+
       <EstacionesList
         lineId={id || 1}
         onSelect={handleStationPress}
         onDataLoaded={onDataLoaded}
         cardColor={lineColorInfo.color}
         textColor={lineColorInfo.textColor}
+        skip={skip}
       />
 
       {/* Botón manual por si el usuario quiere reintentar */}
       <View style={{ paddingVertical: 12 }}>
         <Pressable
-          onPress={() => (isListening ? stop() : start())}
+          onPress={() => {
+              if (isListening) {
+                stop();
+              } else {
+                interruptTTSAndStart(); 
+              }
+            }}
           className="h-12 rounded-2xl items-center justify-center shadow-lg bg-slate-300"
         >
           <Text>{isListening ? "Detener" : "Grabar"}</Text>
@@ -124,9 +207,9 @@ export default function StationsScreen() {
       </View>
 
       <Footer
-        onBackPress={() => router.back()}
+        onBackPress={() => {Speech.stop(); router.back();}}
         onMenuPress={() => setMenuOpen(true)}
-        onHomePress={() => router.replace("/")}
+        onHomePress={() => {Speech.stop(); router.replace("/")}}
       />
 
       <SlideMenu visible={menuOpen} onClose={() => setMenuOpen(false)} />

@@ -23,7 +23,7 @@ export function isStartAssistant(text: string) {
   if (!t) return false;
   // acepta: iniciar, confirmar, continuar, siguiente, comenzar, asistente, aceptar, ok
   return (
-    /\b(iniciar|confirmar|continuar|siguiente|comenzar|aceptar|ok)\b/.test(t) ||
+    /\b(iniciar|confirmar|continuar|siguiente|siguientes|comenzar|aceptar|ok|avanzar)\b/.test(t) ||
     t.includes("asistente")
   );
 }

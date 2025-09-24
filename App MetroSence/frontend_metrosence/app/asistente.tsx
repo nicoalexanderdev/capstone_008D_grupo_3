@@ -41,7 +41,7 @@ export default function AssistantScreen() {
   const granted = !!permission?.granted;
 
   // Hook de voz: lee el mensaje y escucha la respuesta del usuario
-  const { isListening, recognizedText, start, stop, speakThenListen } = useVoiceCapture({
+  const { isListening, recognizedText, start, stop, speakThenListen, interruptTTSAndStart } = useVoiceCapture({
     lang: 'es-CL',
     onFinalText: async (finalText) => {
       const intent = intentFromSpeech(finalText);
@@ -97,7 +97,13 @@ export default function AssistantScreen() {
 
           {/* Botón manual de micrófono */}
           <Pressable
-            onPress={() => (isListening ? stop() : start())}
+            onPress={() => {
+              if (isListening) {
+                stop();
+              } else {
+                interruptTTSAndStart(); 
+              }
+            }}
             style={[styles.micBtn, isListening && { opacity: 0.85 }]}
           >
             <Text style={styles.micText}>{isListening ? 'Detener' : 'Grabar'}</Text>
@@ -114,7 +120,13 @@ export default function AssistantScreen() {
           {/* Mic para comandos una vez concedido (ej. "volver") */}
           <View style={{ paddingHorizontal: 24, paddingVertical: 12 }}>
             <Pressable
-              onPress={() => (isListening ? stop() : start())}
+              onPress={() => {
+              if (isListening) {
+                stop();
+              } else {
+                interruptTTSAndStart(); 
+              }
+            }}
               style={[styles.micBtn, isListening && { opacity: 0.85 }]}
             >
               <Text style={styles.micText}>{isListening ? 'Detener' : 'Grabar'}</Text>
@@ -126,7 +138,7 @@ export default function AssistantScreen() {
         </View>
       )}
 
-      <Footer onBackPress={() => router.back()} onMenuPress={() => setMenuOpen(true)} onHomePress={() => router.replace('/')} />
+      <Footer onBackPress={() => {Speech.stop(); router.back();}} onMenuPress={() => setMenuOpen(true)} onHomePress={() => {Speech.stop(); router.replace('/')}} />
       <SlideMenu visible={menuOpen} onClose={() => setMenuOpen(false)} />
     </View>
   );

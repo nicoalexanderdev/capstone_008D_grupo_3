@@ -33,9 +33,11 @@ def eliminar_estacion_de_linea(
 @router.get("/linea/{linea_id}/estaciones", response_model=List[Estacion])
 def obtener_estaciones_por_linea(
     linea_id: int,
+    skip: int = 0, 
+    limit: int = 10,
     db: Session = Depends(get_db)
 ):
-    return service.obtener_estaciones_por_linea(db=db, linea_id=linea_id)
+    return service.obtener_estaciones_por_linea(db=db, skip=skip, limit=limit, linea_id=linea_id)
 
 # Obtener todas las líneas de una estación
 @router.get("/estacion/{estacion_id}/lineas", response_model=List[Linea])
