@@ -113,7 +113,7 @@ export default function StationsScreen() {
 
       speakThenListen(
         `Estaciones de la ${lineName} con dirección hacia ${estacionTerminalName}. 
-        Por favor, di el nombre de la estación que deseas seleccionar, aprieta el botón de grabar si ya sabes la estación en la que estas.
+        Por favor, di el nombre de la estación que deseas seleccionar, aprieta el botón de grabar si ya sabes la estación en la que estás.
         Puedes decir atrás para volver.
         Te nombraré las  ${getCurrentRangeText()}: ${names}. ${moreMessage}.`
       );
