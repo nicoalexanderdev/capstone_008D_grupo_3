@@ -1,5 +1,0 @@
-mcp[cli]
-httpx[http2]
-pydantic>=2
-cachetools
-python-dotenv
