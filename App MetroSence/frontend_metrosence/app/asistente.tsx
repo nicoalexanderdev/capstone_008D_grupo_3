@@ -48,7 +48,7 @@ function intentFromSpeech(text: string): "accept" | "deny" | "back" | "none" {
   return "none";
 }
 
-export default async function AssistantScreen() {
+export default function AssistantScreen() {
   const [facing, setFacing] = useState<CameraType>("back");
   const [permission, requestPermission] = useCameraPermissions();
   const [menuOpen, setMenuOpen] = useState(false);
