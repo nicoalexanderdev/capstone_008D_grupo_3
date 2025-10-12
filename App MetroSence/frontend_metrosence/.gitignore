@@ -4,6 +4,7 @@ android/
 ios/
 
 .env
+.easignore
 
 # dependencies
 node_modules/
