@@ -4,6 +4,7 @@ from .logging import configure_logging, LogLevels
 from fastapi.middleware.cors import CORSMiddleware
 from .database.core import engine, Base
 from .entities.admin import Admin
+from fastapi.staticfiles import StaticFiles
 
 # comando para levantar app: uv run -m uvicorn app.main:app --reload
 
@@ -19,6 +20,7 @@ app = FastAPI(
 )
 
 app.router.redirect_slashes = False
+app.mount("/models", StaticFiles(directory="models", html=False), name="models")
 
 origins = [
     "http://localhost:8081",  # Para desarrollo 
