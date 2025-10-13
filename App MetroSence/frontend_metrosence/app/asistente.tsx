@@ -1,24 +1,20 @@
-// app/asistente.tsx (voz para pedir permisos + confirmar/denegar)
-import React, { useEffect, useMemo, useRef, useState } from "react";
+// app/asistente.tsx
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Pressable,
-  Image,
+  Alert,
 } from "react-native";
 import { router } from "expo-router";
-import { CameraView, CameraType, useCameraPermissions } from "expo-camera";
-import { Header } from "../components/Header";
-import Footer from "../components/Footer";
-import SlideMenu from "../components/SlideMenu";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import * as Speech from "expo-speech";
-import { useRemoteTFLiteModel } from "../hooks/useRemoteTFLiteModel";
-
-// Hook de voz reutilizable
-import { useVoiceCapture } from "../hooks/useVoiceCapture";
 import { useMidasModel } from "../hooks/useMidasModel";
+import { useObstacleDetector } from "../hooks/useObstacleDetector";
+import { useVoiceCapture } from "../hooks/useVoiceCapture";
+
+const MODEL_URL = process.env.EXPO_PUBLIC_TFLITE_MIDAS_URL || "";
 
 function normalize(s: string) {
   return (s || "")
@@ -30,15 +26,15 @@ function normalize(s: string) {
     .trim();
 }
 
-function intentFromSpeech(text: string): "accept" | "deny" | "back" | "none" {
+function intentFromSpeech(text: string): "accept" | "deny" | "back" | "start" | "stop" | "none" {
   const t = normalize(text);
   if (!t) return "none";
-  // aceptar: permitir, aceptar, conceder, otorgar, si, sí, ok, continuar
+  
   if (/\b(permitir|aceptar|conceder|otorgar|si|sí|ok|continuar)\b/.test(t))
     return "accept";
-  // denegar: no, rechazar, denegar, cancelar
   if (/\b(no|rechazar|denegar|cancelar)\b/.test(t)) return "deny";
-  // volver atrás
+  if (/\b(iniciar|empezar|comenzar|activar|start)\b/.test(t)) return "start";
+  if (/\b(detener|parar|stop|desactivar)\b/.test(t)) return "stop";
   if (
     t.includes("volver atras") ||
     t.includes("volver atrás") ||
@@ -49,361 +45,430 @@ function intentFromSpeech(text: string): "accept" | "deny" | "back" | "none" {
 }
 
 export default function AssistantScreen() {
-  const [facing, setFacing] = useState<CameraType>("back");
   const [permission, requestPermission] = useCameraPermissions();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [depthMap, setDepthMap] = useState<number[] | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-
+  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
   const cameraRef = useRef<CameraView>(null);
+  const scanIntervalRef = useRef<number | null>(null);
+  const errorCountRef = useRef<number>(0);
+
   const granted = !!permission?.granted;
 
-  const { model, loading, error } = useRemoteTFLiteModel(
-    process.env.EXPO_PUBLIC_TFLITE_MIDAS_URL
-  );
-
-  if (model) {
-    console.log("Modelo MiDaS cargado:", model);
-  }
-
-  if (error) {
-    console.error("Error cargando modelo MiDaS:", error);
-  }
-
-  // Hook de MiDaS
+  const { loading, error, runOnImageUri, inputDims } = useMidasModel(MODEL_URL);
+  
   const {
-    isLoading: modelLoading,
-    error: modelError,
-    estimateDepth,
-    reloadModel,
-  } = useMidasModel();
+    analyzeDepthMap,
+    currentObstacle,
+    isAlerting,
+    resetAlerts,
+  } = useObstacleDetector({
+    criticalThreshold: 450,
+    dangerThreshold: 550,
+    warningThreshold: 650,
+    minAlertInterval: 3000, // 3 segundos entre alertas
+    enableVoice: true,
+    enableHaptics: false, // Deshabilitado por compatibilidad Android
+  });
 
-  // Hook de voz: lee el mensaje y escucha la respuesta del usuario
-  const {
-    isListening,
-    recognizedText,
-    start,
-    stop,
-    speakThenListen,
-    interruptTTSAndStart,
-  } = useVoiceCapture({
+  const { speakThenListen } = useVoiceCapture({
     lang: "es-CL",
     onFinalText: async (finalText) => {
       const intent = intentFromSpeech(finalText);
+      
       if (intent === "accept") {
         const res = await requestPermission();
         if (res?.granted) {
-          // Confirmar por voz que se concedió
-          Speech.speak(
-            "Permiso concedido. La cámara está lista. Puedes decir volver para regresar."
-          );
+          Speech.speak("Permiso concedido. Di iniciar para comenzar la detección.");
         } else {
           speakThenListen(
-            "No se concedió el permiso. ¿Deseas intentarlo otra vez? Di permitir u ok, o di no para cancelar."
+            "No se concedió el permiso. ¿Deseas intentarlo otra vez?"
           );
         }
         return;
       }
-      if (intent === "deny") {
-        speakThenListen(
-          "Entendido, no activaré la cámara. Puedes decir volver para regresar."
-        );
+      
+      if (intent === "start") {
+        if (!isScanning) {
+          startScanning();
+        }
         return;
       }
+      
+      if (intent === "stop") {
+        if (isScanning) {
+          stopScanning();
+        }
+        return;
+      }
+      
       if (intent === "back") {
+        stopScanning();
         router.back();
         return;
       }
-      // Si no entendimos, repreguntamos
-      if (!granted) {
-        speakThenListen(
-          "No te escuché bien. ¿Deseas permitir el uso de la cámara? Di permitir u ok, o di no para cancelar."
-        );
+      
+      if (intent === "deny") {
+        speakThenListen("Entendido. Puedes decir volver para regresar.");
+        return;
       }
     },
   });
 
-  // Capturar y procesar imagen
-  // En tu función captureAndProcess:
-  const captureAndProcess = async () => {
-    if (!cameraRef.current) return;
-
+  // Función para escanear en tiempo real
+  const scanForObstacles = async () => {
     try {
-      setIsProcessing(true);
-      Speech.speak("Capturando imagen para análisis de profundidad.", {language: "es"});
+      const cam = cameraRef.current;
+      if (!cam || !isCameraReady) return;
 
-      // Tomar foto
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
+      const photo = await cam.takePictureAsync({
+        quality: 0.5, // Menor calidad para más velocidad
+        base64: false,
+        skipProcessing: true,
       });
 
-      setCapturedImage(photo.uri);
-
-      // Procesar con MiDaS
-      const depth = await estimateDepth(photo.uri);
-      setDepthMap(depth);
-
-      if (depth) {
-        Speech.speak("Análisis de profundidad completado exitosamente.",  {language: "es"});
-        console.log("Mapa de profundidad:", depth.length, "puntos");
-      } else {
-        Speech.speak("No se pudo analizar la profundidad.");
+      const result = await runOnImageUri(photo.uri);
+      
+      // Si llegamos aquí, el escaneo fue exitoso - resetear contador
+      errorCountRef.current = 0;
+      
+      // Analizar el mapa de profundidad
+      await analyzeDepthMap(
+        result.data,
+        inputDims.w,
+        inputDims.h
+      );
+    } catch (err: any) {
+      console.error("Error en scanForObstacles:", err);
+      
+      // Incrementar contador de errores
+      errorCountRef.current++;
+      
+      // Si hay muchos errores seguidos, detener el escaneo
+      if (errorCountRef.current > 5) {
+        stopScanning();
+        Speech.speak("Se detuvo la detección por errores técnicos.");
+        Alert.alert(
+          "Error",
+          "Hubo problemas con la detección. Intenta reiniciar la app."
+        );
       }
-    } catch (error) {
-      console.error("Error:", error);
-      Speech.speak("Error al procesar la imagen.",  {language: "es"});
-    } finally {
-      setIsProcessing(false);
     }
   };
 
-  // Reiniciar cámara
-  const resetCamera = () => {
-    setCapturedImage(null);
-    setDepthMap(null);
+  // Iniciar escaneo continuo
+  const startScanning = () => {
+    if (isScanning) return;
+    
+    setIsScanning(true);
+    resetAlerts();
+    errorCountRef.current = 0; // Reset error count
+    Speech.speak("Detección iniciada. Explorando el entorno.", {language: "es"});
+
+    // Escanear cada 2 segundos (más estable)
+    scanIntervalRef.current = setInterval(scanForObstacles, 7000);
   };
 
-  // Al entrar o cuando cambie el estado de permisos, anuncia y activa escucha
+  // Detener escaneo
+  const stopScanning = () => {
+    if (!isScanning) return;
+    
+    setIsScanning(false);
+    Speech.speak("Detección detenida.", {language: "es"});
+    
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+  };
+
+  // Limpiar al desmontar
   useEffect(() => {
-    if (!permission) return; // aún cargando
+    return () => {
+      if (scanIntervalRef.current) {
+        clearInterval(scanIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Anunciar estado inicial
+  useEffect(() => {
+    if (!permission) return;
     if (granted) {
-      // Ya está concedido
-      Speech.speak("Permiso de cámara concedido.", { language: "es" });
+      Speech.speak("Cámara lista. Di iniciar para comenzar la detección.", {language: "es"});
     } else {
       speakThenListen(
-        "Para continuar necesito tu permiso para usar la cámara. Di permitir u ok para conceder, o di no para cancelar."
+        "Para continuar necesito tu permiso para usar la cámara. Di permitir para conceder."
       );
     }
   }, [granted, !!permission]);
 
+  if (!permission) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text>Cargando permisos…</Text>
+      </View>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <View style={styles.permissionsContainer}>
+        <Text style={styles.message}>Necesito permiso de cámara</Text>
+        <TouchableOpacity
+          onPress={requestPermission}
+          style={styles.primaryBtn}
+        >
+          <Text style={styles.primaryText}>Conceder permiso</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // Función para obtener el color según la zona
+  const getZoneColor = () => {
+    if (!currentObstacle) return "#10b981"; // Verde
+    switch (currentObstacle.zone) {
+      case "critical": return "#ef4444"; // Rojo
+      case "danger": return "#f59e0b"; // Naranja
+      case "warning": return "#eab308"; // Amarillo
+      default: return "#10b981"; // Verde
+    }
+  };
+
+  const getZoneText = () => {
+    if (!currentObstacle) return "Sin obstáculos";
+    switch (currentObstacle.zone) {
+      case "critical": return "⚠️ PELIGRO CRÍTICO";
+      case "danger": return "⚠️ OBJETO CERCANO";
+      case "warning": return "⚠ PRECAUCIÓN";
+      default: return "✓ RUTA DESPEJADA";
+    }
+  };
+
   return (
     <View style={styles.root}>
-      <Header onReportPress={() => router.push("/report")} />
-
-      {!granted ? (
-        <View style={styles.permissionsContainer}>
-          <Text style={styles.message}>
-            Necesitamos tu permiso para usar la cámara y el modelo MiDaS de
-            profundidad.
-          </Text>
-          <Pressable style={styles.primaryBtn} onPress={requestPermission}>
-            <Text style={styles.primaryText}>Conceder permiso</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => {
-              if (isListening) stop();
-              else interruptTTSAndStart();
-            }}
-            style={[styles.micBtn, isListening && { opacity: 0.85 }]}
-          >
-            <Text style={styles.micText}>
-              {isListening ? "Detener" : "Usar Voz"}
-            </Text>
-          </Pressable>
-
-          {!!recognizedText && (
-            <Text style={styles.recognized}>Escuché: {recognizedText}</Text>
-          )}
-        </View>
-      ) : (
-        <View style={styles.cameraContainer}>
-          {!capturedImage ? (
-            <CameraView style={styles.camera} facing={facing} ref={cameraRef} />
-          ) : (
-            <View style={styles.previewContainer}>
-              <Image
-                source={{ uri: capturedImage }}
-                style={styles.previewImage}
-              />
-              {depthMap && (
-                <View style={styles.depthInfo}>
-                  <Text style={styles.depthText}>
-                    Análisis MiDaS completado. {depthMap.length} puntos de
-                    profundidad.
-                  </Text>
-                  <Text style={styles.depthStats}>
-                    Rango: {Math.min(...depthMap).toFixed(2)} -{" "}
-                    {Math.max(...depthMap).toFixed(2)}
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          {/* Controles */}
-          <View style={styles.controlsContainer}>
-            {!capturedImage ? (
-              <>
-                <Pressable
-                  onPress={captureAndProcess}
-                  style={[styles.captureBtn, isProcessing && { opacity: 0.6 }]}
-                  disabled={isProcessing || modelLoading}
-                >
-                  <Text style={styles.captureText}>
-                    {isProcessing ? "Procesando..." : "Analizar Profundidad"}
-                  </Text>
-                </Pressable>
-
-                {modelLoading && (
-                  <Text style={styles.modelStatus}>
-                    Cargando modelo MiDaS...
-                  </Text>
-                )}
-
-                {modelError && (
-                  <Text style={styles.errorText}>Error: {modelError}</Text>
-                )}
-              </>
-            ) : (
-              <Pressable onPress={resetCamera} style={styles.secondaryBtn}>
-                <Text style={styles.secondaryText}>Nueva Captura</Text>
-              </Pressable>
-            )}
-
-            {/* Micrófono */}
-            <Pressable
-              onPress={() => {
-                if (isListening) stop();
-                else interruptTTSAndStart();
-              }}
-              style={[styles.micBtn, isListening && { opacity: 0.85 }]}
+      {/* Vista de cámara */}
+      <View style={styles.cameraContainer}>
+        <CameraView
+          ref={cameraRef}
+          style={styles.camera}
+          facing="back"
+          onCameraReady={() => setIsCameraReady(true)}
+        />
+        
+        {/* Overlay con información */}
+        {isScanning && currentObstacle && (
+          <View style={styles.overlay}>
+            <View
+              style={[
+                styles.alertBanner,
+                { backgroundColor: getZoneColor() },
+                isAlerting && styles.alertBannerPulsing,
+              ]}
             >
-              <Text style={styles.micText}>
-                {isListening ? "Detener" : "Comandos Voz"}
+              <Text style={styles.alertText}>{getZoneText()}</Text>
+              <Text style={styles.alertSubtext}>
+                {currentObstacle.position === "center"
+                  ? "Al frente"
+                  : currentObstacle.position === "left"
+                  ? "A la izquierda"
+                  : "A la derecha"}
               </Text>
-            </Pressable>
+            </View>
 
-            {!!recognizedText && (
-              <Text style={styles.recognized}>Escuché: {recognizedText}</Text>
-            )}
+            {/* Información técnica */}
+            <View style={styles.infoBox}>
+              <Text style={styles.infoText}>
+                Distancia: {currentObstacle.closestDistance.toFixed(0)}
+              </Text>
+              <Text style={styles.infoText}>
+                Cobertura: {currentObstacle.percentage.toFixed(1)}%
+              </Text>
+            </View>
           </View>
-        </View>
-      )}
+        )}
+      </View>
 
-      <Footer
-        onBackPress={() => {
-          Speech.stop();
-          router.back();
-        }}
-        onMenuPress={() => setMenuOpen(true)}
-        onHomePress={() => {
-          Speech.stop();
-          router.replace("/");
-        }}
-      />
-      <SlideMenu visible={menuOpen} onClose={() => setMenuOpen(false)} />
+      {/* Controles */}
+      <View style={styles.controlsContainer}>
+        <Text style={styles.modelStatus}>
+          Modelo: {loading ? "Cargando…" : error ? "Error" : "Listo ✅"}
+        </Text>
+        
+        {!isScanning ? (
+          <TouchableOpacity
+            disabled={loading || !!error || !isCameraReady}
+            onPress={startScanning}
+            style={[
+              styles.startBtn,
+              (loading || error || !isCameraReady) && styles.btnDisabled,
+            ]}
+          >
+            <Text style={styles.btnText}>▶ Iniciar Detección</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={stopScanning}
+            style={styles.stopBtn}
+          >
+            <Text style={styles.btnText}>⏹ Detener</Text>
+          </TouchableOpacity>
+        )}
+
+        <TouchableOpacity
+          onPress={() => {
+            stopScanning();
+            router.back();
+          }}
+          style={styles.backBtn}
+        >
+          <Text style={styles.btnText}>← Volver</Text>
+        </TouchableOpacity>
+
+        {isScanning && (
+          <View style={styles.scanningIndicator}>
+            <View style={styles.pulse} />
+            <Text style={styles.scanningText}>Escaneando...</Text>
+          </View>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#0b0b0f" },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   permissionsContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 16,
   },
-  cameraContainer: { flex: 1 },
-  message: {
-    textAlign: "center",
-    paddingBottom: 12,
+  cameraContainer: { flex: 1, position: "relative" },
+  camera: { flex: 1 },
+  overlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "flex-start",
+    alignItems: "center",
+    paddingTop: 40,
+  },
+  alertBanner: {
+    paddingVertical: 20,
+    paddingHorizontal: 30,
+    borderRadius: 12,
+    alignItems: "center",
+    minWidth: "80%",
+  },
+  alertBannerPulsing: {
+    shadowColor: "#fff",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  alertText: {
     color: "white",
+    fontSize: 24,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  alertSubtext: {
+    color: "white",
+    fontSize: 16,
+    marginTop: 4,
     opacity: 0.9,
   },
+  infoBox: {
+    marginTop: 20,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    padding: 12,
+    borderRadius: 8,
+  },
+  infoText: {
+    color: "white",
+    fontSize: 14,
+    fontFamily: "monospace",
+  },
+  controlsContainer: {
+    padding: 20,
+    backgroundColor: "#1a1a1f",
+  },
+  modelStatus: {
+    color: "#fbbf24",
+    textAlign: "center",
+    marginBottom: 12,
+    fontSize: 14,
+  },
+  startBtn: {
+    backgroundColor: "#10b981",
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  stopBtn: {
+    backgroundColor: "#ef4444",
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  backBtn: {
+    backgroundColor: "#6b7280",
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  btnDisabled: {
+    opacity: 0.5,
+  },
+  btnText: {
+    color: "white",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  message: {
+    marginBottom: 16,
+    fontSize: 16,
+    color: "white",
+  },
   primaryBtn: {
-    marginTop: 6,
     backgroundColor: "#7dd3fc",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
     borderRadius: 12,
   },
   primaryText: {
     color: "#0b0b0f",
     fontWeight: "700",
-  },
-  camera: { flex: 1 },
-  previewContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#000",
-  },
-  previewImage: {
-    width: "100%",
-    height: "70%",
-    resizeMode: "contain",
-  },
-  depthInfo: {
-    padding: 16,
-    alignItems: "center",
-  },
-  depthText: {
-    color: "white",
     fontSize: 16,
-    textAlign: "center",
-    marginBottom: 8,
   },
-  depthStats: {
-    color: "#7dd3fc",
-    fontSize: 14,
+  scanningIndicator: {
+    marginTop: 16,
+    alignItems: "center",
   },
-  controlsContainer: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-  },
-  captureBtn: {
+  pulse: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: "#10b981",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  captureText: {
-    color: "white",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-  secondaryBtn: {
-    backgroundColor: "#6b7280",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  secondaryText: {
-    color: "white",
-    fontWeight: "700",
-  },
-  modelStatus: {
-    color: "#fbbf24",
-    textAlign: "center",
     marginBottom: 8,
   },
-  errorText: {
-    color: "#ef4444",
-    textAlign: "center",
-    marginBottom: 8,
-  },
-  micBtn: {
-    backgroundColor: "#cbd5e1",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  micText: {
-    color: "#0b0b0f",
-    fontWeight: "700",
-  },
-  recognized: {
-    color: "white",
-    marginTop: 8,
-    opacity: 0.8,
-    textAlign: "center",
+  scanningText: {
+    color: "#10b981",
+    fontSize: 12,
+    fontWeight: "600",
   },
 });

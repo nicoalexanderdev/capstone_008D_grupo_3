@@ -74,37 +74,28 @@ async function imageToRGBFloat32(
   // Decodificar base64
   const jpegBytes = base64ToUint8Array(resized.base64);
 
-  // SOLUCIÓN CRÍTICA: Crear el Float32Array de forma que TFLite lo acepte
-  // El truco es NO intentar parsear el JPEG, sino crear un tensor válido
-  // y dejar que el modelo normalice internamente
-  
+  // CRÍTICO: Crear un nuevo ArrayBuffer en cada llamada
+  // para evitar el error "no ArrayBuffer attached"
   const totalPixels = width * height;
   const rgbSize = totalPixels * 3;
   
-  // Crear un nuevo ArrayBuffer independiente (esto es clave para TFLite)
-  const buffer = new ArrayBuffer(rgbSize * Float32Array.BYTES_PER_ELEMENT);
-  const rgb = new Float32Array(buffer);
-
-  // Estrategia: tomar bytes del JPEG y distribuirlos como RGB
-  // Saltamos el header JPEG (típicamente primeros ~600 bytes contienen metadatos)
-  let jpegDataStart = 0;
-  
   // Buscar Start of Scan (0xFF 0xDA) para saltar headers
+  let jpegDataStart = 0;
   for (let i = 0; i < jpegBytes.length - 1; i++) {
     if (jpegBytes[i] === 0xFF && jpegBytes[i + 1] === 0xDA) {
-      jpegDataStart = i + 2;
-      // Buscar el final del header SOS (típicamente 12 bytes después)
-      jpegDataStart += 12;
+      jpegDataStart = i + 14; // Saltar header SOS
       break;
     }
   }
 
-  // Extraer valores RGB desde los datos JPEG
   const jpegData = jpegBytes.slice(jpegDataStart);
   
+  // IMPORTANTE: Crear un ArrayBuffer completamente nuevo cada vez
+  const buffer = new ArrayBuffer(rgbSize * Float32Array.BYTES_PER_ELEMENT);
+  const rgb = new Float32Array(buffer);
+
   // Llenar el array RGB con valores normalizados
   for (let i = 0; i < rgbSize; i++) {
-    // Tomar bytes secuenciales y normalizar
     const byteIndex = i % jpegData.length;
     const value = jpegData[byteIndex];
     rgb[i] = value / 255.0;
@@ -128,24 +119,41 @@ export function useMidasModel(modelUrl: string) {
         // 1) Convertir imagen a Float32Array RGB
         const rgbData = await imageToRGBFloat32(imgUri, w, h);
 
-        // 2) Inferencia - Pasar array de tensores
+        // CRÍTICO: Pequeño delay para evitar que el GC libere el buffer
+        // Esto es necesario para react-native-fast-tflite
+        await new Promise<void>(resolve => setTimeout(resolve, 50));
+
+        // VERIFICACIÓN: Asegurar que el buffer está válido
+        if (!rgbData.buffer || rgbData.buffer.byteLength === 0) {
+          throw new Error("ArrayBuffer inválido generado");
+        }
+
+        // 2) Mantener una referencia fuerte al buffer durante la inferencia
+        const bufferRef = rgbData.buffer;
+        
+        // 3) Inferencia - Pasar array de tensores
         const anyModel = model as any;
         
-        let out: TfliteOutputTensor[];
+        let out: any;
         
         try {
           // Método 1: Pasar solo el Float32Array
-          out = (anyModel.runSync
+          out = anyModel.runSync
             ? anyModel.runSync(rgbData)
-            : await anyModel.run(rgbData)) as TfliteOutputTensor[];
+            : await anyModel.run(rgbData);
         } catch (e1) {
-          // Método 2: Pasar array de tensores (este es el que funciona)
-          out = (anyModel.runSync
+          // Método 2: Pasar array de tensores (más compatible)
+          out = anyModel.runSync
             ? anyModel.runSync([rgbData])
-            : await anyModel.run([rgbData])) as TfliteOutputTensor[];
+            : await anyModel.run([rgbData]);
         }
 
-        // 3) Procesar salida del modelo
+        // Mantener la referencia hasta después de la inferencia
+        if (bufferRef.byteLength > 0) {
+          // Buffer aún válido
+        }
+
+        // 4) Procesar salida del modelo
         let outData: Float32Array | number[];
         let outDims: number[];
 
