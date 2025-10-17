@@ -8,13 +8,19 @@ import {
   Alert,
 } from "react-native";
 import { router } from "expo-router";
-import { CameraView, useCameraPermissions } from "expo-camera";
+import { CameraView, useCameraPermissions, Camera } from "expo-camera";
 import * as Speech from "expo-speech";
 import { useMidasModel } from "../hooks/useMidasModel";
 import { useObstacleDetector } from "../hooks/useObstacleDetector";
 import { useVoiceCapture } from "../hooks/useVoiceCapture";
+import { useYoloModel, type YoloDetection } from "../hooks/useYoloModel";
 
-const MODEL_URL = process.env.EXPO_PUBLIC_TFLITE_MIDAS_URL || "";
+const MIDAS_MODEL_URL = process.env.EXPO_PUBLIC_TFLITE_MIDAS_URL || "";
+const YOLO_MODEL_URL = process.env.EXPO_PUBLIC_TFLITE_YOLO_URL || "";
+
+// Debug: Verificar URLs
+console.log("🔗 URL MiDaS:", MIDAS_MODEL_URL);
+console.log("🔗 URL YOLO:", YOLO_MODEL_URL);
 
 function normalize(s: string) {
   return (s || "")
@@ -48,14 +54,34 @@ export default function AssistantScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [detectedObjects, setDetectedObjects] = useState<YoloDetection[]>([]);
   const cameraRef = useRef<CameraView>(null);
   const scanIntervalRef = useRef<number | null>(null);
   const errorCountRef = useRef<number>(0);
 
   const granted = !!permission?.granted;
 
-  const { loading, error, runOnImageUri, inputDims } = useMidasModel(MODEL_URL);
+  // Hook para MiDaS (detección de profundidad)
+  const { loading: midasLoading, error: midasError, runOnImageUri, inputDims } = useMidasModel(MIDAS_MODEL_URL);
   
+  // Hook para YOLO (detección de objetos)
+  const { 
+    loading: yoloLoading, 
+    error: yoloError, 
+    detectObjects,
+    model: yoloModel,
+    isReady: yoloReady,
+  } = useYoloModel(YOLO_MODEL_URL, 0.01, 0.45);
+  
+  // Debug: Verificar que los modelos son diferentes
+  useEffect(() => {
+    if (yoloModel) {
+      console.log("🤖 YOLO Model outputs:", (yoloModel as any).outputs);
+      console.log("🟢 YOLO Ready:", yoloReady);
+    }
+  }, [yoloModel, yoloReady]);
+  
+  // Hook para detección de obstáculos
   const {
     analyzeDepthMap,
     currentObstacle,
@@ -64,9 +90,9 @@ export default function AssistantScreen() {
   } = useObstacleDetector({
     criticalThreshold: 380,
     dangerThreshold: 480,
-    minAlertInterval: 2500, // 3 segundos entre alertas
+    minAlertInterval: 2500,
     enableVoice: true,
-    enableHaptics: false, // Deshabilitado por compatibilidad Android
+    enableHaptics: false,
   });
 
   const { speakThenListen } = useVoiceCapture({
@@ -113,46 +139,101 @@ export default function AssistantScreen() {
     },
   });
 
-  // Función para escanear en tiempo real
-  const scanForObstacles = async () => {
-    try {
-      const cam = cameraRef.current;
-      if (!cam || !isCameraReady) return;
+  // Función para anunciar objeto detectado más cercano
+  const announceDetectedObject = (objects: YoloDetection[], obstacle: any) => {
+    if (!objects || objects.length === 0) return;
 
-      const photo = await cam.takePictureAsync({
-        quality: 0.5, // Menor calidad para más velocidad
-        base64: false,
-        skipProcessing: true,
-      });
+    // Encontrar el objeto con mayor confianza en la zona de peligro
+    const topObject = objects.reduce((prev, current) => 
+      current.confidence > prev.confidence ? current : prev
+    );
 
-      const result = await runOnImageUri(photo.uri);
+    if (topObject.confidence > 0.5) {
+      const position = obstacle.position === "center" 
+        ? "al frente" 
+        : obstacle.position === "left" 
+        ? "a la izquierda" 
+        : "a la derecha";
       
-      // Si llegamos aquí, el escaneo fue exitoso - resetear contador
-      errorCountRef.current = 0;
-      
-      // Analizar el mapa de profundidad
-      await analyzeDepthMap(
-        result.data,
-        inputDims.w,
-        inputDims.h
+      Speech.speak(
+        `${topObject.className} detectado ${position}`,
+        { language: "es" }
       );
-    } catch (err: any) {
-      console.error("Error en scanForObstacles:", err);
-      
-      // Incrementar contador de errores
-      errorCountRef.current++;
-      
-      // Si hay muchos errores seguidos, detener el escaneo
-      if (errorCountRef.current > 5) {
-        stopScanning();
-        Speech.speak("Se detuvo la detección por errores técnicos.");
-        Alert.alert(
-          "Error",
-          "Hubo problemas con la detección. Intenta reiniciar la app."
-        );
-      }
     }
   };
+
+  // Función para escanear en tiempo real
+const scanForObstacles = async () => {
+  try {
+    const cam = cameraRef.current;
+    if (!cam || !isCameraReady) return;
+
+    console.log("📸 Tomando foto...");
+    const photo = await cam.takePictureAsync({
+      quality: 0.7,
+      base64: false,
+      skipProcessing: true,
+    });
+
+    console.log("📸 Foto capturada:", photo.uri);
+
+    // 1. Ejecutar MiDaS para obtener mapa de profundidad
+    console.log("🌊 Ejecutando MiDaS...");
+    const depthResult = await runOnImageUri(photo.uri);
+    console.log("✅ MiDaS completado");
+    
+    // 2. Ejecutar YOLO para detectar objetos
+    console.log("🚀 Iniciando YOLO...");
+    let objects: YoloDetection[] = [];
+    try {
+      console.log("📞 Llamando a detectObjects...");
+      objects = await detectObjects(photo.uri);
+      console.log(`🎯 YOLO retornó: ${objects.length} objetos`);
+      setDetectedObjects(objects);
+      console.log(`🎯 YOLO completado: ${objects.length} objetos detectados`);
+      
+      if (objects.length > 0) {
+        objects.forEach((obj, idx) => {
+          console.log(`   ${idx + 1}. ${obj.className} (${(obj.confidence * 100).toFixed(1)}%)`);
+        });
+      }
+    } catch (yoloErr) {
+      console.error("❌ Error en YOLO:", yoloErr);
+      // Continuar incluso si YOLO falla
+    }
+    
+    // Reset error count on success
+    errorCountRef.current = 0;
+    
+    // 3. Analizar el mapa de profundidad
+    console.log("📊 Analizando profundidad...");
+    const obstacleDetected = await analyzeDepthMap(
+      depthResult.data,
+      inputDims.w,
+      inputDims.h
+    );
+
+    // 4. Si hay obstáculo y objetos detectados, anunciar
+    if (currentObstacle && currentObstacle.zone !== "safe" && objects.length > 0) {
+      announceDetectedObject(objects, currentObstacle);
+    }
+
+  } catch (err: any) {
+    console.error("❌ Error en scanForObstacles:", err);
+    
+    errorCountRef.current++;
+    console.log(`⚠️ Conteo de errores: ${errorCountRef.current}`);
+    
+    if (errorCountRef.current > 3) {
+      stopScanning();
+      Speech.speak("Se detuvo la detección por errores técnicos.");
+      Alert.alert(
+        "Error",
+        "Hubo problemas con la detección. Revisa la consola para más detalles."
+      );
+    }
+  }
+};
 
   // Iniciar escaneo continuo
   const startScanning = () => {
@@ -160,10 +241,11 @@ export default function AssistantScreen() {
     
     setIsScanning(true);
     resetAlerts();
-    errorCountRef.current = 0; // Reset error count
+    setDetectedObjects([]);
+    errorCountRef.current = 0;
     Speech.speak("Detección iniciada. Explorando el entorno.", {language: "es"});
 
-    // Escanear cada 2 segundos (más estable)
+    // Escanear cada 5 segundos
     scanIntervalRef.current = setInterval(scanForObstacles, 5000);
   };
 
@@ -172,6 +254,7 @@ export default function AssistantScreen() {
     if (!isScanning) return;
     
     setIsScanning(false);
+    setDetectedObjects([]);
     Speech.speak("Detección detenida.", {language: "es"});
     
     if (scanIntervalRef.current) {
@@ -225,11 +308,11 @@ export default function AssistantScreen() {
 
   // Función para obtener el color según la zona
   const getZoneColor = () => {
-    if (!currentObstacle) return "#10b981"; // Verde
+    if (!currentObstacle) return "#10b981";
     switch (currentObstacle.zone) {
-      case "critical": return "#ef4444"; // Rojo
-      case "danger": return "#f59e0b"; // Naranja
-      default: return "#10b981"; // Verde
+      case "critical": return "#ef4444";
+      case "danger": return "#f59e0b";
+      default: return "#10b981";
     }
   };
 
@@ -241,6 +324,9 @@ export default function AssistantScreen() {
       default: return "✓ RUTA DESPEJADA";
     }
   };
+
+  const modelsLoading = midasLoading || yoloLoading;
+  const modelsError = midasError || yoloError;
 
   return (
     <View style={styles.root}>
@@ -254,34 +340,50 @@ export default function AssistantScreen() {
         />
         
         {/* Overlay con información */}
-        {isScanning && currentObstacle && (
+        {isScanning && (
           <View style={styles.overlay}>
-            <View
-              style={[
-                styles.alertBanner,
-                { backgroundColor: getZoneColor() },
-                isAlerting && styles.alertBannerPulsing,
-              ]}
-            >
-              <Text style={styles.alertText}>{getZoneText()}</Text>
-              <Text style={styles.alertSubtext}>
-                {currentObstacle.position === "center"
-                  ? "Al frente"
-                  : currentObstacle.position === "left"
-                  ? "A la izquierda"
-                  : "A la derecha"}
-              </Text>
-            </View>
+            {currentObstacle && (
+              <View
+                style={[
+                  styles.alertBanner,
+                  { backgroundColor: getZoneColor() },
+                  isAlerting && styles.alertBannerPulsing,
+                ]}
+              >
+                <Text style={styles.alertText}>{getZoneText()}</Text>
+                <Text style={styles.alertSubtext}>
+                  {currentObstacle.position === "center"
+                    ? "Al frente"
+                    : currentObstacle.position === "left"
+                    ? "A la izquierda"
+                    : "A la derecha"}
+                </Text>
+              </View>
+            )}
 
             {/* Información técnica */}
-            <View style={styles.infoBox}>
-              <Text style={styles.infoText}>
-                Distancia: {currentObstacle.closestDistance.toFixed(0)}
-              </Text>
-              <Text style={styles.infoText}>
-                Cobertura: {currentObstacle.percentage.toFixed(1)}%
-              </Text>
-            </View>
+            {currentObstacle && (
+              <View style={styles.infoBox}>
+                <Text style={styles.infoText}>
+                  Distancia: {currentObstacle.closestDistance.toFixed(0)}
+                </Text>
+                <Text style={styles.infoText}>
+                  Cobertura: {currentObstacle.percentage.toFixed(1)}%
+                </Text>
+              </View>
+            )}
+
+            {/* Objetos detectados */}
+            {detectedObjects.length > 0 && (
+              <View style={styles.objectsBox}>
+                <Text style={styles.objectsTitle}>Objetos detectados:</Text>
+                {detectedObjects.slice(0, 3).map((obj, idx) => (
+                  <Text key={idx} style={styles.objectText}>
+                    • {obj.className} ({(obj.confidence * 100).toFixed(0)}%)
+                  </Text>
+                ))}
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -289,16 +391,18 @@ export default function AssistantScreen() {
       {/* Controles */}
       <View style={styles.controlsContainer}>
         <Text style={styles.modelStatus}>
-          Modelo: {loading ? "Cargando…" : error ? "Error" : "Listo ✅"}
+          MiDaS: {midasLoading ? "Cargando…" : midasError ? "Error" : "✅"}
+          {" | "}
+          YOLO: {yoloLoading ? "Cargando…" : yoloError ? "Error" : "✅"}
         </Text>
         
         {!isScanning ? (
           <TouchableOpacity
-            disabled={loading || !!error || !isCameraReady}
+            disabled={modelsLoading || !!modelsError || !isCameraReady}
             onPress={startScanning}
             style={[
               styles.startBtn,
-              (loading || error || !isCameraReady) && styles.btnDisabled,
+              (modelsLoading || modelsError || !isCameraReady) && styles.btnDisabled,
             ]}
           >
             <Text style={styles.btnText}>▶ Iniciar Detección</Text>
@@ -308,7 +412,7 @@ export default function AssistantScreen() {
             onPress={stopScanning}
             style={styles.stopBtn}
           >
-            <Text style={styles.btnText}>⏹ Detener</Text>
+            <Text style={styles.btnText}>■ Detener</Text>
           </TouchableOpacity>
         )}
 
@@ -395,6 +499,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "monospace",
   },
+  objectsBox: {
+    marginTop: 12,
+    backgroundColor: "rgba(59, 130, 246, 0.8)",
+    padding: 12,
+    borderRadius: 8,
+    minWidth: "70%",
+  },
+  objectsTitle: {
+    color: "white",
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 6,
+  },
+  objectText: {
+    color: "white",
+    fontSize: 12,
+    marginTop: 2,
+  },
   controlsContainer: {
     padding: 20,
     backgroundColor: "#1a1a1f",
@@ -403,7 +525,7 @@ const styles = StyleSheet.create({
     color: "#fbbf24",
     textAlign: "center",
     marginBottom: 12,
-    fontSize: 14,
+    fontSize: 12,
   },
   startBtn: {
     backgroundColor: "#10b981",

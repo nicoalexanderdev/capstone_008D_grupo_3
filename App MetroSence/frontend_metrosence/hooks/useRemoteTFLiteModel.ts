@@ -7,7 +7,8 @@ import {
 
 export type TInputDims = { n: number; h: number; w: number; c: number };
 
-let singletonPromise: Promise<TensorflowModel | null> | null = null;
+// CAMBIO CRÍTICO: Usar un Map para múltiples modelos en lugar de un singleton global
+const modelCache = new Map<string, Promise<TensorflowModel | null>>();
 
 function detectInputDims(m: TensorflowModel | null | undefined): TInputDims {
   // Distintas versiones exponen inputs como { dims } o { shape }
@@ -31,7 +32,9 @@ function detectInputDims(m: TensorflowModel | null | undefined): TInputDims {
 }
 
 /**
- * Carga un modelo TFLite desde URL (Opción A). Reutiliza una sola instancia (singleton).
+ * Carga un modelo TFLite desde URL.
+ * Reutiliza instancias por URL (cache basado en URL).
+ * Soporta múltiples modelos simultáneos.
  * Requiere Development Build o Release (no funciona en Expo Go).
  */
 export function useRemoteTFLiteModel(url: string) {
@@ -54,41 +57,79 @@ export function useRemoteTFLiteModel(url: string) {
   }, []);
 
   useEffect(() => {
+    if (!url) {
+      setError(new Error("URL del modelo no proporcionada"));
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
-    if (!singletonPromise) {
-      singletonPromise = (async () => {
-        const m = await loadTensorflowModel({ url });
-        return m ?? null;
+    // Verificar si ya existe una promesa de carga para esta URL
+    if (!modelCache.has(url)) {
+      console.log(`📥 Cargando modelo desde: ${url}`);
+      
+      // Crear nueva promesa de carga y guardarla en el cache
+      const loadPromise = (async () => {
+        try {
+          const m = await loadTensorflowModel({ url });
+          console.log(`✅ Modelo cargado exitosamente desde: ${url}`);
+          return m ?? null;
+        } catch (err) {
+          console.error(`❌ Error cargando modelo desde ${url}:`, err);
+          // Remover del cache si falla la carga
+          modelCache.delete(url);
+          throw err;
+        }
       })();
+
+      modelCache.set(url, loadPromise);
+    } else {
+      console.log(`♻️ Reutilizando modelo cacheado: ${url}`);
     }
 
-    singletonPromise.then((m) => {
+    // Obtener el modelo del cache
+    modelCache.get(url)!.then((m) => {
       if (!mountedRef.current) return;
 
       // DEBUG: Inspeccionar el modelo
       console.log("=== DEBUG MODELO ===");
+      console.log("URL:", url);
       console.log("Modelo cargado:", !!m);
       if (m) {
         console.log("Propiedades del modelo:", Object.keys(m));
         console.log("Inputs:", (m as any).inputs || (m as any).inputTensors);
         console.log("Outputs:", (m as any).outputs || (m as any).outputTensors);
-
-        // Ver qué métodos tiene disponibles
-        console.log("Tiene runSync?", typeof (m as any).runSync);
-        console.log("Tiene run?", typeof (m as any).run);
       }
       console.log("===================");
 
       setModel(m);
       setInputDims(detectInputDims(m));
       setLoading(false);
+    }).catch((err) => {
+      if (!mountedRef.current) return;
+      console.error("Error al obtener modelo del cache:", err);
+      setError(err);
+      setLoading(false);
     });
 
-    // Si quisieras cerrar el modelo al desmontar (no común en singleton):
-    // return () => { model?.close?.(); };
+    // Nota: No cerramos los modelos al desmontar porque pueden estar
+    // siendo usados por otros componentes (cache compartido)
   }, [url]);
 
   return { model, inputDims, loading, error };
+}
+
+/**
+ * Función para limpiar el cache de modelos (útil para debugging o cambios de modelo)
+ */
+export function clearModelCache(url?: string) {
+  if (url) {
+    modelCache.delete(url);
+    console.log(`🗑️ Cache limpiado para: ${url}`);
+  } else {
+    modelCache.clear();
+    console.log("🗑️ Todo el cache de modelos limpiado");
+  }
 }
