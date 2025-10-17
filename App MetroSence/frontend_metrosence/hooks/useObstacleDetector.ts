@@ -3,39 +3,37 @@ import { useState, useCallback, useRef } from "react";
 import * as Speech from "expo-speech";
 import * as Haptics from "expo-haptics";
 
-export type ObstacleZone = "safe" | "warning" | "danger" | "critical";
+export type ObstacleZone = "safe" | "danger" | "critical";
 
 export type ObstacleInfo = {
   zone: ObstacleZone;
-  distance: number; // Valor promedio de profundidad
-  closestDistance: number; // Valor mínimo (más cercano)
-  position: "center" | "left" | "right" | "top" | "bottom";
-  percentage: number; // % del área que está en esa zona
+  distance: number;
+  closestDistance: number;
+  position: "center" | "left" | "right";
+  percentage: number;
 };
 
 export type DetectionConfig = {
-  criticalThreshold: number; // Objeto MUY cercano (alarma fuerte)
-  dangerThreshold: number; // Objeto cercano (alerta)
-  warningThreshold: number; // Objeto a distancia media (advertencia)
-  minAlertInterval: number; // Mínimo tiempo entre alertas (ms)
+  criticalThreshold: number;  // Objeto MUY cercano
+  dangerThreshold: number;    // Objeto cercano
+  // Todo > dangerThreshold = SAFE (sin alerta)
+  minAlertInterval: number;
   enableVoice: boolean;
   enableHaptics: boolean;
   enableSound: boolean;
 };
 
 const DEFAULT_CONFIG: DetectionConfig = {
-  criticalThreshold: 450, // Valores más bajos = más cerca
-  dangerThreshold: 550,
-  warningThreshold: 650,
-  minAlertInterval: 2000, // 2 segundos entre alertas
+  // 🔧 UMBRALES OPTIMIZADOS basados en datos reales
+  criticalThreshold: 380,  // < 380 = CRÍTICO (ej: 284, 318, 323, 353, 357, 359, 371)
+  dangerThreshold: 480,    // < 480 = PELIGRO (ej: 387, 395, 411, 421, 449, 462, 474)
+  // >= 480 = SEGURO (ej: 476, 500, 502, 522, 528, 539+)
+  minAlertInterval: 2000,
   enableVoice: true,
   enableHaptics: true,
   enableSound: true,
 };
 
-/**
- * Hook para detectar obstáculos cercanos usando el mapa de profundidad
- */
 export function useObstacleDetector(config: Partial<DetectionConfig> = {}) {
   const fullConfig = { ...DEFAULT_CONFIG, ...config };
   
@@ -45,7 +43,7 @@ export function useObstacleDetector(config: Partial<DetectionConfig> = {}) {
   const alertCount = useRef<number>(0);
 
   /**
-   * Analiza una región del mapa de profundidad
+   * 🔧 MEJORADO: Solo analiza región horizontal (ignora top/bottom)
    */
   const analyzeRegion = useCallback(
     (
@@ -82,30 +80,21 @@ export function useObstacleDetector(config: Partial<DetectionConfig> = {}) {
     []
   );
 
-  /**
-   * Determina la zona de peligro según la distancia
-   */
   const getZone = useCallback(
     (distance: number): ObstacleZone => {
       if (distance < fullConfig.criticalThreshold) return "critical";
       if (distance < fullConfig.dangerThreshold) return "danger";
-      if (distance < fullConfig.warningThreshold) return "warning";
       return "safe";
     },
     [fullConfig]
   );
 
-  /**
-   * Genera mensaje de voz según la zona y posición
-   */
   const getVoiceMessage = useCallback(
     (obstacle: ObstacleInfo): string => {
       const positionText = {
         center: "al frente",
         left: "a la izquierda",
         right: "a la derecha",
-        top: "arriba",
-        bottom: "abajo",
       }[obstacle.position];
 
       switch (obstacle.zone) {
@@ -113,8 +102,6 @@ export function useObstacleDetector(config: Partial<DetectionConfig> = {}) {
           return `¡Cuidado! Objeto muy cercano ${positionText}`;
         case "danger":
           return `Atención, objeto cercano ${positionText}`;
-        case "warning":
-          return `Precaución ${positionText}`;
         default:
           return "";
       }
@@ -122,14 +109,10 @@ export function useObstacleDetector(config: Partial<DetectionConfig> = {}) {
     []
   );
 
-  /**
-   * Ejecuta alerta (voz + vibración + sonido)
-   */
   const triggerAlert = useCallback(
     async (obstacle: ObstacleInfo) => {
       const now = Date.now();
       
-      // Evitar spam de alertas
       if (now - lastAlertTime.current < fullConfig.minAlertInterval) {
         return;
       }
@@ -138,7 +121,6 @@ export function useObstacleDetector(config: Partial<DetectionConfig> = {}) {
       alertCount.current++;
       setIsAlerting(true);
 
-      // Vibración según la zona (solo si está habilitado y soportado)
       if (fullConfig.enableHaptics) {
         try {
           switch (obstacle.zone) {
@@ -154,30 +136,22 @@ export function useObstacleDetector(config: Partial<DetectionConfig> = {}) {
               }, 200);
               break;
             case "danger":
+              // Vibración moderada
               await Haptics.notificationAsync(
                 Haptics.NotificationFeedbackType.Warning
               );
               break;
-            case "warning":
-              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              break;
           }
         } catch (err) {
-          // Haptics no disponible en esta plataforma, silenciosamente ignorar
           console.log("Haptics no disponible:", err);
         }
       }
 
-      // Mensaje de voz
       if (fullConfig.enableVoice) {
         const message = getVoiceMessage(obstacle);
         if (message) {
-          // Interrumpir speech anterior si existe
           Speech.stop();
-          
-          // Velocidad de habla según urgencia
           const rate = obstacle.zone === "critical" ? 1.2 : 1.0;
-          
           Speech.speak(message, {
             language: "es-CL",
             rate,
@@ -186,16 +160,14 @@ export function useObstacleDetector(config: Partial<DetectionConfig> = {}) {
         }
       }
 
-      // Sonido de alerta (opcional - puedes agregar Audio más adelante)
-      // if (fullConfig.enableSound) { ... }
-
       setTimeout(() => setIsAlerting(false), 500);
     },
     [fullConfig, getVoiceMessage]
   );
 
   /**
-   * Analiza el mapa de profundidad completo
+   * 🔧 CLAVE: Solo analiza la FRANJA HORIZONTAL central
+   * Ignora píxeles de arriba y abajo que causan falsos positivos
    */
   const analyzeDepthMap = useCallback(
     async (
@@ -203,88 +175,131 @@ export function useObstacleDetector(config: Partial<DetectionConfig> = {}) {
       width: number,
       height: number
     ): Promise<ObstacleInfo | null> => {
-      // Dividir la imagen en regiones
-      const centerW = Math.floor(width * 0.4);
-      const centerH = Math.floor(height * 0.4);
-      const centerX = Math.floor(width * 0.3);
-      const centerY = Math.floor(height * 0.3);
+      // 🔧 SOLUCIÓN DEFINITIVA: Usar TODA la imagen verticalmente (100%)
+      // No ignorar nada - MiDaS necesita toda la información
+      const stripStartY = 0;           // Desde el inicio
+      const stripEndY = height;        // Hasta el final
+      const stripHeight = height;      // 100% de altura
 
-      // Analizar región central (más importante)
-      const center = analyzeRegion(
-        depthData,
-        width,
-        height,
-        centerX,
-        centerY,
-        centerX + centerW,
-        centerY + centerH
-      );
+      // 🔧 NUEVO: Buscar el mínimo GLOBAL dentro de la franja horizontal
+      let globalMinInStrip = Infinity;
+      let globalMinX = 0;
+      let globalMinY = 0;
 
-      // Analizar regiones laterales
+      for (let y = stripStartY; y < stripEndY; y++) {
+        for (let x = 0; x < width; x++) {
+          const idx = y * width + x;
+          if (idx < depthData.length) {
+            const val = depthData[idx];
+            if (val < globalMinInStrip) {
+              globalMinInStrip = val;
+              globalMinX = x;
+              globalMinY = y;
+            }
+          }
+        }
+      }
+
+      // Determinar en qué región está el píxel más cercano
+      let position: "center" | "left" | "right";
+      const thirdWidth = Math.floor(width / 3);
+      
+      if (globalMinX < thirdWidth) {
+        position = "left";
+      } else if (globalMinX < thirdWidth * 2) {
+        position = "center";
+      } else {
+        position = "right";
+      }
+
+      // Analizar las 3 regiones para obtener promedios (para información adicional)
       const left = analyzeRegion(
         depthData,
         width,
         height,
         0,
-        centerY,
-        centerX,
-        centerY + centerH
+        stripStartY,
+        thirdWidth,
+        stripEndY
+      );
+
+      const center = analyzeRegion(
+        depthData,
+        width,
+        height,
+        thirdWidth,
+        stripStartY,
+        thirdWidth * 2,
+        stripEndY
       );
 
       const right = analyzeRegion(
         depthData,
         width,
         height,
-        centerX + centerW,
-        centerY,
+        thirdWidth * 2,
+        stripStartY,
         width,
-        centerY + centerH
+        stripEndY
       );
 
-      // Encontrar la región con el objeto más cercano
-      const regions = [
-        { ...center, position: "center" as const },
-        { ...left, position: "left" as const },
-        { ...right, position: "right" as const },
-      ];
+      // Obtener el promedio de la región donde está el obstáculo más cercano
+      const regionAvg = position === "left" ? left.avg :
+                        position === "center" ? center.avg :
+                        right.avg;
 
-      const closest = regions.reduce((prev, curr) =>
-        curr.min < prev.min ? curr : prev
-      );
-
-      const zone = getZone(closest.min);
+      // 🔧 CRÍTICO: Usar el mínimo GLOBAL de la franja para determinar zona
+      const zone = getZone(globalMinInStrip);
       
-      // Calcular porcentaje del área afectada
-      const threshold = fullConfig.warningThreshold;
+      // Calcular porcentaje de píxeles en zona de peligro (solo en franja)
+      const dangerThreshold = fullConfig.dangerThreshold;
       let affectedPixels = 0;
-      for (let i = 0; i < depthData.length; i++) {
-        if (depthData[i] < threshold) affectedPixels++;
+      let totalPixelsInStrip = 0;
+
+      // Solo contar píxeles dentro de la franja horizontal
+      for (let y = stripStartY; y < stripEndY; y++) {
+        for (let x = 0; x < width; x++) {
+          const idx = y * width + x;
+          if (idx < depthData.length) {
+            totalPixelsInStrip++;
+            if (depthData[idx] < dangerThreshold) {
+              affectedPixels++;
+            }
+          }
+        }
       }
-      const percentage = (affectedPixels / depthData.length) * 100;
+
+      const percentage = totalPixelsInStrip > 0 
+        ? (affectedPixels / totalPixelsInStrip) * 100 
+        : 0;
 
       const obstacle: ObstacleInfo = {
         zone,
-        distance: closest.avg,
-        closestDistance: closest.min,
-        position: closest.position,
+        distance: regionAvg,
+        closestDistance: globalMinInStrip,  // Ahora es el mínimo REAL de la franja
+        position,
         percentage,
       };
 
       setCurrentObstacle(obstacle);
 
-      // Disparar alerta solo si es CRÍTICO
+      // Alertar en zonas peligrosas
       if (zone === "critical") {
         await triggerAlert(obstacle);
       }
+
+      // 🔧 DEBUG: Ahora muestra el mínimo REAL de la franja
+      console.log(
+        `🎯 ${zone.toUpperCase()} | Min franja: ${globalMinInStrip.toFixed(0)} | ` +
+        `Avg región: ${regionAvg.toFixed(0)} | Pos: ${position} | ` +
+        `Cobertura: ${percentage.toFixed(1)}%`
+      );
 
       return obstacle;
     },
     [analyzeRegion, getZone, triggerAlert, fullConfig]
   );
 
-  /**
-   * Resetea el contador de alertas
-   */
   const resetAlerts = useCallback(() => {
     alertCount.current = 0;
     lastAlertTime.current = 0;

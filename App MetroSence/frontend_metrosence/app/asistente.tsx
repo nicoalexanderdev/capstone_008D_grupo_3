@@ -62,10 +62,9 @@ export default function AssistantScreen() {
     isAlerting,
     resetAlerts,
   } = useObstacleDetector({
-    criticalThreshold: 450,
-    dangerThreshold: 550,
-    warningThreshold: 650,
-    minAlertInterval: 3000, // 3 segundos entre alertas
+    criticalThreshold: 380,
+    dangerThreshold: 480,
+    minAlertInterval: 2500, // 3 segundos entre alertas
     enableVoice: true,
     enableHaptics: false, // Deshabilitado por compatibilidad Android
   });
@@ -165,7 +164,7 @@ export default function AssistantScreen() {
     Speech.speak("Detección iniciada. Explorando el entorno.", {language: "es"});
 
     // Escanear cada 2 segundos (más estable)
-    scanIntervalRef.current = setInterval(scanForObstacles, 7000);
+    scanIntervalRef.current = setInterval(scanForObstacles, 5000);
   };
 
   // Detener escaneo
@@ -230,7 +229,6 @@ export default function AssistantScreen() {
     switch (currentObstacle.zone) {
       case "critical": return "#ef4444"; // Rojo
       case "danger": return "#f59e0b"; // Naranja
-      case "warning": return "#eab308"; // Amarillo
       default: return "#10b981"; // Verde
     }
   };
@@ -240,7 +238,6 @@ export default function AssistantScreen() {
     switch (currentObstacle.zone) {
       case "critical": return "⚠️ PELIGRO CRÍTICO";
       case "danger": return "⚠️ OBJETO CERCANO";
-      case "warning": return "⚠ PRECAUCIÓN";
       default: return "✓ RUTA DESPEJADA";
     }
   };
