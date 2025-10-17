@@ -7,7 +7,7 @@ export type Estacion = {
 
 export async function getEstacionesPorLinea(lineaId: number, skip: number): Promise<Estacion[]> {
   try {
-    const estaciones: Estacion[] = await apiFetch(`/lineas-estaciones/linea/${lineaId}/estaciones?skip=${skip}&limit=10`);
+    const estaciones: Estacion[] = await apiFetch(`/lineas-estaciones/linea/${lineaId}/estaciones?skip=17&limit=1`);
     return estaciones;
   } catch (error) {
     console.error("Failed to fetch estaciones:", error);
