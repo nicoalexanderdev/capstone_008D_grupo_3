@@ -1,3 +1,6 @@
+import { Buffer } from 'buffer';
+global.Buffer = Buffer;
+import './polyfills';
 import { registerRootComponent } from 'expo';
 import 'expo-router/entry';
 

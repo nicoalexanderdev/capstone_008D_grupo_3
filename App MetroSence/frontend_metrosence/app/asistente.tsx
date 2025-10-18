@@ -328,6 +328,15 @@ const scanForObstacles = async () => {
   const modelsLoading = midasLoading || yoloLoading;
   const modelsError = midasError || yoloError;
 
+  // Obtener el objeto con mayor confianza
+  const getTopDetection = (): YoloDetection | null => {
+    if (detectedObjects.length === 0) return null;
+    
+    return detectedObjects.reduce((prev, current) => 
+      current.confidence > prev.confidence ? current : prev
+    );
+  };
+
   return (
     <View style={styles.root}>
       {/* Vista de cámara */}
@@ -374,16 +383,19 @@ const scanForObstacles = async () => {
             )}
 
             {/* Objetos detectados */}
-            {detectedObjects.length > 0 && (
-              <View style={styles.objectsBox}>
-                <Text style={styles.objectsTitle}>Objetos detectados:</Text>
-                {detectedObjects.slice(0, 3).map((obj, idx) => (
-                  <Text key={idx} style={styles.objectText}>
-                    • {obj.className} ({(obj.confidence * 100).toFixed(0)}%)
+            {detectedObjects.length > 0 && (() => {
+              const topObject = getTopDetection();
+              if (!topObject) return null;
+              
+              return (
+                <View style={styles.objectsBox}>
+                  <Text style={styles.objectsTitle}>Objeto Principal:</Text>
+                  <Text style={styles.objectText}>
+                    • {topObject.className} ({(topObject.confidence * 100).toFixed(0)}%)
                   </Text>
-                ))}
-              </View>
-            )}
+                </View>
+              );
+            })()}
           </View>
         )}
       </View>

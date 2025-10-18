@@ -2,7 +2,11 @@
 import { useCallback, useEffect, useState } from "react";
 import * as ImageManipulator from "expo-image-manipulator";
 import { useRemoteTFLiteModel } from "./useRemoteTFLiteModel";
-import { decode } from 'jpeg-js';
+import { Buffer as BufferPolyfill } from 'buffer';
+if (typeof global.Buffer === 'undefined') {
+  global.Buffer = BufferPolyfill;
+}
+import * as jpeg from 'jpeg-js'
 
 // Clases COCO que YOLO puede detectar (80 clases)
 const COCO_CLASSES = [
@@ -71,10 +75,14 @@ async function imageToRGBFloat32(
   width: number,
   height: number
 ): Promise<Float32Array> {
+  console.log('Buffer disponible:', typeof Buffer !== 'undefined');
+
   const resized = await ImageManipulator.manipulateAsync(
     uri,
     [{ resize: { width, height } }],
     {
+      compress: 1,
+      format: ImageManipulator.SaveFormat.JPEG,
       base64: true,
     }
   );
@@ -82,33 +90,31 @@ async function imageToRGBFloat32(
   if (!resized.base64) {
     throw new Error("No se pudo obtener base64");
   }
-  
 
   const jpegBytes = base64ToUint8Array(resized.base64);
+  console.log('JPEG bytes:', jpegBytes.length);
 
-  const totalPixels = width * height;
-  const rgbSize = totalPixels * 3;
-  
-  // Buscar Start of Scan (0xFF 0xDA)
-  let jpegDataStart = 0;
-  for (let i = 0; i < jpegBytes.length - 1; i++) {
-    if (jpegBytes[i] === 0xFF && jpegBytes[i + 1] === 0xDA) {
-      jpegDataStart = i + 14;
-      break;
-    }
+  // Convertir Uint8Array a Buffer para jpeg-js
+  const buffer = Buffer.from(jpegBytes);
+  console.log('Buffer creado:', buffer.length);
+
+  // Decodificar usando jpeg-js con opción useUint8Array
+  const rawImageData = jpeg.decode(buffer);
+  console.log(`✅ Imagen decodificada: ${rawImageData.width}x${rawImageData.height}, ${rawImageData.data.length} bytes`);
+
+  if (rawImageData.width !== width || rawImageData.height !== height) {
+    throw new Error("Dimensiones no coinciden después de decodificar");
   }
 
-  const jpegData = jpegBytes.slice(jpegDataStart);
-  
-  // Crear ArrayBuffer nuevo cada vez
-  const buffer = new ArrayBuffer(rgbSize * Float32Array.BYTES_PER_ELEMENT);
-  const rgb = new Float32Array(buffer);
+  const rgb = new Float32Array(width * height * 3);
+  const rgbaData = rawImageData.data;
 
-  // Llenar el array RGB con valores normalizados [0, 1]
-  for (let i = 0; i < rgbSize; i++) {
-    const byteIndex = i % jpegData.length;
-    const value = jpegData[byteIndex];
-    rgb[i] = value / 255.0;
+  let j = 0;
+  for (let i = 0; i < rgbaData.length; i += 4) {
+    rgb[j++] = rgbaData[i] / 255.0;     // R
+    rgb[j++] = rgbaData[i + 1] / 255.0; // G
+    rgb[j++] = rgbaData[i + 2] / 255.0; // B
+    // Ignorar alpha
   }
 
   return rgb;
@@ -135,22 +141,28 @@ function calculateIoU(
 }
 
 /**
- * Aplica Non-Maximum Suppression
+ * Aplica Non-Maximum Suppression por clase
  */
 function applyNMS(detections: YoloDetection[], iouThreshold: number): YoloDetection[] {
   if (detections.length === 0) return [];
-  
-  const sorted = [...detections].sort((a, b) => b.confidence - a.confidence);
+
+  const byClass = new Map<number, YoloDetection[]>();
+  for (const det of detections) {
+    if (!byClass.has(det.classId)) byClass.set(det.classId, []);
+    byClass.get(det.classId)!.push(det);
+  }
+
   const keep: YoloDetection[] = [];
-
-  while (sorted.length > 0) {
-    const current = sorted.shift()!;
-    keep.push(current);
-
-    for (let i = sorted.length - 1; i >= 0; i--) {
-      const iou = calculateIoU(current.bbox, sorted[i].bbox);
-      if (iou > iouThreshold) {
-        sorted.splice(i, 1);
+  for (const group of byClass.values()) {
+    const sorted = [...group].sort((a, b) => b.confidence - a.confidence);
+    while (sorted.length > 0) {
+      const current = sorted.shift()!;
+      keep.push(current);
+      for (let i = sorted.length - 1; i >= 0; i--) {
+        const iou = calculateIoU(current.bbox, sorted[i].bbox);
+        if (iou > iouThreshold) {
+          sorted.splice(i, 1);
+        }
       }
     }
   }
@@ -160,8 +172,8 @@ function applyNMS(detections: YoloDetection[], iouThreshold: number): YoloDetect
 
 /**
  * Procesa la salida del modelo YOLO11n
- * Formato YOLO11n: [1, 84, 8400] transpuesto
- * Los datos están organizados: [x1,x2,...x8400, y1,y2,...y8400, w1,w2,..., h1,h2,..., class0_1,class0_2,...]
+ * Formato YOLO11n: [1, 84, 8400] (features x detections)
+ * Features: cx, cy, w, h (normalizados 0-1), then 80 class probs
  */
 function processYoloOutput(
   output: Float32Array | number[],
@@ -172,31 +184,19 @@ function processYoloOutput(
 ): YoloDetection[] {
   const detections: YoloDetection[] = [];
   
-  // YOLO11n formato: [1, 84, 8400]
-  // 84 = 4 (bbox coords) + 80 (class scores)
-  // 8400 = número de detecciones
   const numClasses = 80;
-  const numBboxCoords = 4;
-  const numDetections = 8400; // Fijo para YOLO11n
+  const numDetections = 8400;
   
   console.log(`🔍 Formato YOLO: 84 features x ${numDetections} detecciones`);
   console.log(`📊 Total elementos: ${output.length}`);
 
-  // Los datos están transpuestos:
-  // output[0] = x1, output[1] = x2, ..., output[8399] = x8400
-  // output[8400] = y1, output[8401] = y2, ..., output[16799] = y8400
-  // output[16800] = w1, output[16801] = w2, ..., output[25199] = w8400
-  // output[25200] = h1, output[25201] = h2, ..., output[33599] = h8400
-  // output[33600] = class0_1, output[33601] = class0_2, ...
-  
   for (let i = 0; i < numDetections; i++) {
-    // Índices para cada coordenada/feature
     const xIdx = i;
     const yIdx = numDetections + i;
     const wIdx = numDetections * 2 + i;
     const hIdx = numDetections * 3 + i;
     
-    // Extraer bbox (formato: center_x, center_y, width, height - normalizado)
+    // Extraer bbox (formato: center_x, center_y, width, height - normalizado 0-1)
     const centerX = output[xIdx];
     const centerY = output[yIdx];
     const width = output[wIdx];
@@ -207,7 +207,7 @@ function processYoloOutput(
     let maxClassId = -1;
     
     for (let c = 0; c < numClasses; c++) {
-      const scoreIdx = numDetections * (numBboxCoords + c) + i;
+      const scoreIdx = numDetections * (4 + c) + i;
       const score = output[scoreIdx];
       
       if (score > maxScore) {
@@ -216,12 +216,12 @@ function processYoloOutput(
       }
     }
     
-    // Filtrar por umbral de confianza
     if (maxScore >= confidenceThreshold && maxClassId >= 0) {
-      // Las coordenadas de YOLO11 ya vienen en píxeles, no normalizadas
-      // Convertir de centro a esquina superior izquierda
-      const bboxX = centerX - width / 2;
-      const bboxY = centerY - height / 2;
+      // Escalar a píxeles
+      const bboxX = (centerX - width / 2) * imgWidth;
+      const bboxY = (centerY - height / 2) * imgHeight;
+      const bboxW = width * imgWidth;
+      const bboxH = height * imgHeight;
       
       detections.push({
         className: COCO_CLASSES[maxClassId] || `Clase ${maxClassId}`,
@@ -230,8 +230,8 @@ function processYoloOutput(
         bbox: {
           x: Math.max(0, bboxX),
           y: Math.max(0, bboxY),
-          width: Math.min(width, imgWidth),
-          height: Math.min(height, imgHeight),
+          width: Math.max(0, Math.min(bboxW, imgWidth - bboxX)),
+          height: Math.max(0, Math.min(bboxH, imgHeight - bboxY)),
         },
       });
     }
@@ -239,7 +239,7 @@ function processYoloOutput(
   
   console.log(`✅ ${detections.length} detecciones sobre umbral ${confidenceThreshold.toFixed(2)}`);
   
-  // Aplicar NMS
+  // Aplicar NMS por clase
   const filtered = applyNMS(detections, iouThreshold);
   console.log(`🎯 ${filtered.length} detecciones después de NMS`);
   
