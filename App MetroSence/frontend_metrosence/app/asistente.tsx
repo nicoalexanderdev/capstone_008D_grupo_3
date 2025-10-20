@@ -71,7 +71,7 @@ export default function AssistantScreen() {
     detectObjects,
     model: yoloModel,
     isReady: yoloReady,
-  } = useYoloModel(YOLO_MODEL_URL, 0.01, 0.45);
+  } = useYoloModel(YOLO_MODEL_URL, 0.30, 0.45);
   
   // Debug: Verificar que los modelos son diferentes
   useEffect(() => {
