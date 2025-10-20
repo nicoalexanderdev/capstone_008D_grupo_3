@@ -67,7 +67,7 @@ export default function HomeScreen() {
     setCachedLines(lines);
     const lineNames = lines.map((l) => l.name).join(", ");
     Speech.speak(
-      `Hola, Bienvenido a Metro Sence, ¿Dónde vamos hoy?. Líneas de Metro disponibles: ${lineNames}. Por favor, di el nombre de la línea que deseas seleccionar.`,
+      `Hola, Bienvenido a Metro Sence. Líneas de Metro disponibles: ${lineNames}. Por favor, di el nombre de la línea que deseas seleccionar.`,
       {
         language: "es",
         onDone: () => {
@@ -80,6 +80,7 @@ export default function HomeScreen() {
             if (!isListening) void start();
           }, 200);
         },
+        rate: 1.3
       }
     );
   }
