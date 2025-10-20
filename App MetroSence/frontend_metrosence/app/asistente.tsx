@@ -173,6 +173,7 @@ const scanForObstacles = async () => {
       quality: 0.7,
       base64: false,
       skipProcessing: true,
+      shutterSound: false,
     });
 
     console.log("📸 Foto capturada:", photo.uri);
