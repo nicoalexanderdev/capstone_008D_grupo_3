@@ -92,7 +92,7 @@ export default function AssistantScreen() {
     dangerThreshold: 480,
     minAlertInterval: 2500,
     enableVoice: true,
-    enableHaptics: false,
+    enableHaptics: true,
   });
 
   const { speakThenListen } = useVoiceCapture({
@@ -372,6 +372,7 @@ const scanForObstacles = async () => {
             )}
 
             {/* Información técnica */}
+            {/*}
             {currentObstacle && (
               <View style={styles.infoBox}>
                 <Text style={styles.infoText}>
@@ -381,7 +382,7 @@ const scanForObstacles = async () => {
                   Cobertura: {currentObstacle.percentage.toFixed(1)}%
                 </Text>
               </View>
-            )}
+            )}*/}
 
             {/* Objetos detectados */}
             {detectedObjects.length > 0 && (() => {
