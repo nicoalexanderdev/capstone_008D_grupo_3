@@ -1,0 +1,7 @@
+dataset_yolo/
+dataset_balanced/
+dataset_yolo_balanced_final/
+.venv
+yolo11n.onnx
+yolo11n.pt
+__pycache__
