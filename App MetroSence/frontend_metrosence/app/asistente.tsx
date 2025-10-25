@@ -6,6 +6,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
+  Dimensions,
+  LayoutChangeEvent,
 } from "react-native";
 import { router } from "expo-router";
 import { CameraView, useCameraPermissions, Camera } from "expo-camera";
@@ -55,16 +57,16 @@ export default function AssistantScreen() {
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [detectedObjects, setDetectedObjects] = useState<YoloDetection[]>([]);
+  const [cameraDimensions, setCameraDimensions] = useState({ width: 0, height: 0 });
   const cameraRef = useRef<CameraView>(null);
   const scanIntervalRef = useRef<number | null>(null);
   const errorCountRef = useRef<number>(0);
 
+  const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+
   const granted = !!permission?.granted;
 
-  // Hook para MiDaS (detección de profundidad)
   const { loading: midasLoading, error: midasError, runOnImageUri, inputDims } = useMidasModel(MIDAS_MODEL_URL);
-  
-  // Hook para YOLO (detección de objetos)
   const { 
     loading: yoloLoading, 
     error: yoloError, 
@@ -72,16 +74,6 @@ export default function AssistantScreen() {
     model: yoloModel,
     isReady: yoloReady,
   } = useYoloModel(YOLO_MODEL_URL, 0.30, 0.45);
-  
-  // Debug: Verificar que los modelos son diferentes
-  useEffect(() => {
-    if (yoloModel) {
-      console.log("🤖 YOLO Model outputs:", (yoloModel as any).outputs);
-      console.log("🟢 YOLO Ready:", yoloReady);
-    }
-  }, [yoloModel, yoloReady]);
-  
-  // Hook para detección de obstáculos
   const {
     analyzeDepthMap,
     currentObstacle,
@@ -94,6 +86,19 @@ export default function AssistantScreen() {
     enableVoice: true,
     enableHaptics: true,
   });
+
+  useEffect(() => {
+    if (yoloModel) {
+      console.log("🤖 YOLO Model outputs:", (yoloModel as any).outputs);
+      console.log("🟢 YOLO Ready:", yoloReady);
+    }
+  }, [yoloModel, yoloReady]);
+
+  const handleCameraLayout = (event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    setCameraDimensions({ width, height });
+    console.log(`📏 Camera container: ${width}x${height}`);
+  };
 
   const { speakThenListen } = useVoiceCapture({
     lang: "es-CL",
@@ -139,11 +144,9 @@ export default function AssistantScreen() {
     },
   });
 
-  // Función para anunciar objeto detectado más cercano
   const announceDetectedObject = (objects: YoloDetection[], obstacle: any) => {
     if (!objects || objects.length === 0) return;
 
-    // Encontrar el objeto con mayor confianza en la zona de peligro
     const topObject = objects.reduce((prev, current) => 
       current.confidence > prev.confidence ? current : prev
     );
@@ -162,81 +165,73 @@ export default function AssistantScreen() {
     }
   };
 
-  // Función para escanear en tiempo real
-const scanForObstacles = async () => {
-  try {
-    const cam = cameraRef.current;
-    if (!cam || !isCameraReady) return;
-
-    console.log("📸 Tomando foto...");
-    const photo = await cam.takePictureAsync({
-      quality: 0.7,
-      base64: false,
-      skipProcessing: true,
-      shutterSound: false,
-    });
-
-    console.log("📸 Foto capturada:", photo.uri);
-
-    // 1. Ejecutar MiDaS para obtener mapa de profundidad
-    console.log("🌊 Ejecutando MiDaS...");
-    const depthResult = await runOnImageUri(photo.uri);
-    console.log("✅ MiDaS completado");
-    
-    // 2. Ejecutar YOLO para detectar objetos
-    console.log("🚀 Iniciando YOLO...");
-    let objects: YoloDetection[] = [];
+  const scanForObstacles = async () => {
     try {
-      console.log("📞 Llamando a detectObjects...");
-      objects = await detectObjects(photo.uri);
-      console.log(`🎯 YOLO retornó: ${objects.length} objetos`);
-      setDetectedObjects(objects);
-      console.log(`🎯 YOLO completado: ${objects.length} objetos detectados`);
+      const cam = cameraRef.current;
+      if (!cam || !isCameraReady) return;
+
+      console.log("📸 Tomando foto...");
+      const photo = await cam.takePictureAsync({
+        quality: 0.7,
+        base64: false,
+        skipProcessing: true,
+        shutterSound: false,
+      });
+
+      console.log("📸 Foto capturada:", photo.uri);
+
+      console.log("🌊 Ejecutando MiDaS...");
+      const depthResult = await runOnImageUri(photo.uri);
+      console.log("✅ MiDaS completado");
       
-      if (objects.length > 0) {
-        objects.forEach((obj, idx) => {
-          console.log(`   ${idx + 1}. ${obj.className} (${(obj.confidence * 100).toFixed(1)}%)`);
-        });
+      console.log("🚀 Iniciando YOLO...");
+      let objects: YoloDetection[] = [];
+      try {
+        console.log("📞 Llamando a detectObjects...");
+        objects = await detectObjects(photo.uri);
+        console.log(`🎯 YOLO retornó: ${objects.length} objetos`);
+        setDetectedObjects(objects);
+        console.log(`🎯 YOLO completado: ${objects.length} objetos detectados`);
+        
+        if (objects.length > 0) {
+          objects.forEach((obj, idx) => {
+            console.log(`   ${idx + 1}. ${obj.className} (${(obj.confidence * 100).toFixed(1)}%)`);
+          });
+        }
+      } catch (yoloErr) {
+        console.error("❌ Error en YOLO:", yoloErr);
       }
-    } catch (yoloErr) {
-      console.error("❌ Error en YOLO:", yoloErr);
-      // Continuar incluso si YOLO falla
-    }
-    
-    // Reset error count on success
-    errorCountRef.current = 0;
-    
-    // 3. Analizar el mapa de profundidad
-    console.log("📊 Analizando profundidad...");
-    const obstacleDetected = await analyzeDepthMap(
-      depthResult.data,
-      inputDims.w,
-      inputDims.h
-    );
-
-    // 4. Si hay obstáculo y objetos detectados, anunciar
-    if (currentObstacle && currentObstacle.zone !== "safe" && objects.length > 0) {
-      announceDetectedObject(objects, currentObstacle);
-    }
-
-  } catch (err: any) {
-    console.error("❌ Error en scanForObstacles:", err);
-    
-    errorCountRef.current++;
-    console.log(`⚠️ Conteo de errores: ${errorCountRef.current}`);
-    
-    if (errorCountRef.current > 3) {
-      stopScanning();
-      Speech.speak("Se detuvo la detección por errores técnicos.");
-      Alert.alert(
-        "Error",
-        "Hubo problemas con la detección. Revisa la consola para más detalles."
+      
+      errorCountRef.current = 0;
+      
+      console.log("📊 Analizando profundidad...");
+      const obstacleDetected = await analyzeDepthMap(
+        depthResult.data,
+        inputDims.w,
+        inputDims.h,
+        objects
       );
-    }
-  }
-};
 
-  // Iniciar escaneo continuo
+      if (obstacleDetected && obstacleDetected.zone !== "safe" && objects.length > 0) {
+        announceDetectedObject(objects, obstacleDetected);
+      }
+
+    } catch (err: any) {
+      console.error("❌ Error en scanForObstacles:", err);
+      errorCountRef.current++;
+      console.log(`⚠️ Conteo de errores: ${errorCountRef.current}`);
+      
+      if (errorCountRef.current > 3) {
+        stopScanning();
+        Speech.speak("Se detuvo la detección por errores técnicos.");
+        Alert.alert(
+          "Error",
+          "Hubo problemas con la detección. Revisa la consola para más detalles."
+        );
+      }
+    }
+  };
+
   const startScanning = () => {
     if (isScanning) return;
     
@@ -244,19 +239,17 @@ const scanForObstacles = async () => {
     resetAlerts();
     setDetectedObjects([]);
     errorCountRef.current = 0;
-    Speech.speak("Detección iniciada. Explorando el entorno.", {language: "es"});
+    Speech.speak("Detección iniciada. Explorando el entorno.", { language: "es" });
 
-    // Escanear cada 5 segundos
-    scanIntervalRef.current = setInterval(scanForObstacles, 5000);
+    scanIntervalRef.current = setInterval(scanForObstacles, 6000);
   };
 
-  // Detener escaneo
   const stopScanning = () => {
     if (!isScanning) return;
     
     setIsScanning(false);
     setDetectedObjects([]);
-    Speech.speak("Detección detenida.", {language: "es"});
+    Speech.speak("Detección detenida.", { language: "es" });
     
     if (scanIntervalRef.current) {
       clearInterval(scanIntervalRef.current);
@@ -264,7 +257,6 @@ const scanForObstacles = async () => {
     }
   };
 
-  // Limpiar al desmontar
   useEffect(() => {
     return () => {
       if (scanIntervalRef.current) {
@@ -273,11 +265,10 @@ const scanForObstacles = async () => {
     };
   }, []);
 
-  // Anunciar estado inicial
   useEffect(() => {
     if (!permission) return;
     if (granted) {
-      Speech.speak("Cámara lista. Di iniciar para comenzar la detección.", {language: "es"});
+      Speech.speak("Cámara lista. Di iniciar para comenzar la detección.", { language: "es" });
     } else {
       speakThenListen(
         "Para continuar necesito tu permiso para usar la cámara. Di permitir para conceder."
@@ -307,7 +298,6 @@ const scanForObstacles = async () => {
     );
   }
 
-  // Función para obtener el color según la zona
   const getZoneColor = () => {
     if (!currentObstacle) return "#10b981";
     switch (currentObstacle.zone) {
@@ -329,7 +319,6 @@ const scanForObstacles = async () => {
   const modelsLoading = midasLoading || yoloLoading;
   const modelsError = midasError || yoloError;
 
-  // Obtener el objeto con mayor confianza
   const getTopDetection = (): YoloDetection | null => {
     if (detectedObjects.length === 0) return null;
     
@@ -338,10 +327,30 @@ const scanForObstacles = async () => {
     );
   };
 
+  const scaleBoundingBox = (bbox: YoloDetection["bbox"]) => {
+    const yoloWidth = 640;
+    const yoloHeight = 640;
+    const targetWidth = cameraDimensions.width > 0 ? cameraDimensions.width : screenWidth;
+    const targetHeight = cameraDimensions.height > 0 ? cameraDimensions.height : screenHeight;
+    
+    const scaled = {
+      x: (bbox.x / yoloWidth) * targetWidth,
+      y: (bbox.y / yoloHeight) * targetHeight,
+      width: (bbox.width / yoloWidth) * targetWidth,
+      height: (bbox.height / yoloHeight) * targetHeight,
+    };
+    
+    console.log(
+      `📍 BBox: ${bbox.x.toFixed(0)},${bbox.y.toFixed(0)},${bbox.width.toFixed(0)},${bbox.height.toFixed(0)} ` +
+      `-> Scaled: ${scaled.x.toFixed(0)},${scaled.y.toFixed(0)},${scaled.width.toFixed(0)},${scaled.height.toFixed(0)}`
+    );
+    
+    return scaled;
+  };
+
   return (
     <View style={styles.root}>
-      {/* Vista de cámara */}
-      <View style={styles.cameraContainer}>
+      <View style={styles.cameraContainer} onLayout={handleCameraLayout}>
         <CameraView
           ref={cameraRef}
           style={styles.camera}
@@ -349,7 +358,6 @@ const scanForObstacles = async () => {
           onCameraReady={() => setIsCameraReady(true)}
         />
         
-        {/* Overlay con información */}
         {isScanning && (
           <View style={styles.overlay}>
             {currentObstacle && (
@@ -371,20 +379,34 @@ const scanForObstacles = async () => {
               </View>
             )}
 
-            {/* Información técnica */}
-            {/*}
-            {currentObstacle && (
-              <View style={styles.infoBox}>
-                <Text style={styles.infoText}>
-                  Distancia: {currentObstacle.closestDistance.toFixed(0)}
-                </Text>
-                <Text style={styles.infoText}>
-                  Cobertura: {currentObstacle.percentage.toFixed(1)}%
-                </Text>
-              </View>
-            )}*/}
+            {/* Bounding boxes de YOLO (máximo 3, ordenados por confianza) */}
+            {[...detectedObjects]
+              .sort((a, b) => b.confidence - a.confidence) // Ordenar por confianza descendente
+              .slice(0, 3) // Tomar solo los primeros 3
+              .map((obj, index) => {
+                const scaledBbox = scaleBoundingBox(obj.bbox);
+                const borderColor = obj.confidence > 0.7 ? "#3b82f6" : "#ef4444";
+                return (
+                  <View
+                    key={index}
+                    style={[
+                      styles.bbox,
+                      {
+                        left: scaledBbox.x,
+                        top: scaledBbox.y,
+                        width: scaledBbox.width,
+                        height: scaledBbox.height,
+                        borderColor,
+                      },
+                    ]}
+                  >
+                    <Text style={styles.bboxText}>
+                      {obj.className} ({(obj.confidence * 100).toFixed(0)}%)
+                    </Text>
+                  </View>
+                );
+              })}
 
-            {/* Objetos detectados */}
             {detectedObjects.length > 0 && (() => {
               const topObject = getTopDetection();
               if (!topObject) return null;
@@ -402,7 +424,6 @@ const scanForObstacles = async () => {
         )}
       </View>
 
-      {/* Controles */}
       <View style={styles.controlsContainer}>
         <Text style={styles.modelStatus}>
           MiDaS: {midasLoading ? "Cargando…" : midasError ? "Error" : "✅"}
@@ -502,16 +523,22 @@ const styles = StyleSheet.create({
     marginTop: 4,
     opacity: 0.9,
   },
-  infoBox: {
-    marginTop: 20,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    padding: 12,
-    borderRadius: 8,
+  bbox: {
+    position: "absolute",
+    borderWidth: 2,
+    borderStyle: "solid",
+    borderRadius: 4,
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
   },
-  infoText: {
+  bboxText: {
     color: "white",
-    fontSize: 14,
-    fontFamily: "monospace",
+    fontSize: 12,
+    fontWeight: "600",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    padding: 4,
+    borderRadius: 4,
+    position: "absolute",
+    top: -20,
   },
   objectsBox: {
     marginTop: 12,

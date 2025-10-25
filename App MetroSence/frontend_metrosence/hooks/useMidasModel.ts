@@ -2,6 +2,11 @@
 import { useCallback } from "react";
 import * as ImageManipulator from "expo-image-manipulator";
 import { useRemoteTFLiteModel } from "./useRemoteTFLiteModel";
+import jpeg from 'jpeg-js';
+import { Buffer as BufferPolyfill } from 'buffer';
+if (typeof global.Buffer === 'undefined') {
+  global.Buffer = BufferPolyfill;
+}
 
 export type DepthResult = {
   dims: number[];
@@ -56,49 +61,25 @@ async function imageToRGBFloat32(
   width: number,
   height: number
 ): Promise<Float32Array> {
-  // Redimensionar y obtener base64
   const resized = await ImageManipulator.manipulateAsync(
     uri,
     [{ resize: { width, height } }],
-    {
-      compress: 1,
-      format: ImageManipulator.SaveFormat.JPEG,
-      base64: true,
-    }
+    { compress: 1, format: ImageManipulator.SaveFormat.JPEG, base64: true }
   );
 
-  if (!resized.base64) {
-    throw new Error("No se pudo obtener base64");
-  }
+  if (!resized.base64) throw new Error("No base64");
 
-  // Decodificar base64
-  const jpegBytes = base64ToUint8Array(resized.base64);
+  // Usa Buffer polyfill (e.g., from 'buffer')
+  const Buffer = global.Buffer || require('buffer').Buffer; // Asegura polyfill
+  const rawImageData = jpeg.decode(Buffer.from(resized.base64, 'base64'), { useTArray: true });
 
-  // CRÍTICO: Crear un nuevo ArrayBuffer en cada llamada
-  // para evitar el error "no ArrayBuffer attached"
-  const totalPixels = width * height;
-  const rgbSize = totalPixels * 3;
-  
-  // Buscar Start of Scan (0xFF 0xDA) para saltar headers
-  let jpegDataStart = 0;
-  for (let i = 0; i < jpegBytes.length - 1; i++) {
-    if (jpegBytes[i] === 0xFF && jpegBytes[i + 1] === 0xDA) {
-      jpegDataStart = i + 14; // Saltar header SOS
-      break;
-    }
-  }
+  if (!rawImageData) throw new Error("Decodificación fallida");
 
-  const jpegData = jpegBytes.slice(jpegDataStart);
-  
-  // IMPORTANTE: Crear un ArrayBuffer completamente nuevo cada vez
-  const buffer = new ArrayBuffer(rgbSize * Float32Array.BYTES_PER_ELEMENT);
-  const rgb = new Float32Array(buffer);
-
-  // Llenar el array RGB con valores normalizados
-  for (let i = 0; i < rgbSize; i++) {
-    const byteIndex = i % jpegData.length;
-    const value = jpegData[byteIndex];
-    rgb[i] = value / 255.0;
+  const rgb = new Float32Array(width * height * 3);
+  for (let i = 0, j = 0; i < rawImageData.data.length; i += 4, j += 3) {
+    rgb[j] = rawImageData.data[i] / 255;     // R
+    rgb[j + 1] = rawImageData.data[i + 1] / 255; // G
+    rgb[j + 2] = rawImageData.data[i + 2] / 255; // B
   }
 
   return rgb;

@@ -2,6 +2,7 @@
 import { useState, useCallback, useRef } from "react";
 import * as Speech from "expo-speech";
 import * as Haptics from "expo-haptics";
+import { YoloDetection } from "./useYoloModel";
 
 export type ObstacleZone = "safe" | "danger" | "critical";
 
@@ -14,9 +15,8 @@ export type ObstacleInfo = {
 };
 
 export type DetectionConfig = {
-  criticalThreshold: number;  // Objeto MUY cercano
-  dangerThreshold: number;    // Objeto cercano
-  // Todo > dangerThreshold = SAFE (sin alerta)
+  criticalThreshold: number;
+  dangerThreshold: number;
   minAlertInterval: number;
   enableVoice: boolean;
   enableHaptics: boolean;
@@ -24,10 +24,8 @@ export type DetectionConfig = {
 };
 
 const DEFAULT_CONFIG: DetectionConfig = {
-  // 🔧 UMBRALES OPTIMIZADOS basados en datos reales
-  criticalThreshold: 380,  // < 380 = CRÍTICO (ej: 284, 318, 323, 353, 357, 359, 371)
-  dangerThreshold: 480,    // < 480 = PELIGRO (ej: 387, 395, 411, 421, 449, 462, 474)
-  // >= 480 = SEGURO (ej: 476, 500, 502, 522, 528, 539+)
+  criticalThreshold: 380,
+  dangerThreshold: 480,
   minAlertInterval: 2000,
   enableVoice: true,
   enableHaptics: true,
@@ -36,15 +34,11 @@ const DEFAULT_CONFIG: DetectionConfig = {
 
 export function useObstacleDetector(config: Partial<DetectionConfig> = {}) {
   const fullConfig = { ...DEFAULT_CONFIG, ...config };
-  
   const [currentObstacle, setCurrentObstacle] = useState<ObstacleInfo | null>(null);
   const [isAlerting, setIsAlerting] = useState(false);
   const lastAlertTime = useRef<number>(0);
   const alertCount = useRef<number>(0);
 
-  /**
-   * 🔧 MEJORADO: Solo analiza región horizontal (ignora top/bottom)
-   */
   const analyzeRegion = useCallback(
     (
       depthData: Float32Array | number[],
@@ -81,30 +75,52 @@ export function useObstacleDetector(config: Partial<DetectionConfig> = {}) {
   );
 
   const getZone = useCallback(
-    (distance: number): ObstacleZone => {
-      if (distance < fullConfig.criticalThreshold) return "critical";
-      if (distance < fullConfig.dangerThreshold) return "danger";
+    (distance: number, minDepth: number, maxDepth: number, coverage: number): ObstacleZone => {
+      const range = maxDepth - minDepth;
+      // Inverted for disparity (higher = closer): thresholds now subtracted from max
+      const criticalThreshold = maxDepth - 0.3 * range;
+      const dangerThreshold = maxDepth - 0.5 * range;
+
+      // Inverted condition: check if distance (robust max) > thresholds
+      if (coverage > 50 && distance > dangerThreshold) {
+        return distance > criticalThreshold ? "critical" : "danger";
+      }
       return "safe";
     },
-    [fullConfig]
+    []
   );
 
-  const getVoiceMessage = useCallback(
-    (obstacle: ObstacleInfo): string => {
-      const positionText = {
-        center: "al frente",
-        left: "a la izquierda",
-        right: "a la derecha",
-      }[obstacle.position];
-
-      switch (obstacle.zone) {
-        case "critical":
-          return `¡Cuidado! Objeto muy cercano ${positionText}`;
-        case "danger":
-          return `Atención, objeto cercano ${positionText}`;
-        default:
-          return "";
+  // Renamed and inverted for robust max (higher = closer); sort descending and trim extreme highs
+  const getRobustMax = useCallback(
+    (
+      depthData: Float32Array | number[],
+      width: number,
+      height: number,
+      x: number,
+      y: number
+    ): number => {
+      let values: number[] = [];
+      const radius = 2;
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const ny = y + dy;
+          const nx = x + dx;
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            const idx = ny * width + nx;
+            if (idx < depthData.length) {
+              values.push(depthData[idx]);
+            }
+          }
+        }
       }
+      if (values.length > 0) {
+        // Sort descending (high to low)
+        values.sort((a, b) => b - a);
+        const percentile5 = Math.floor(values.length * 0.05);
+        // Slice removes extreme highs, averages the next highest values
+        return values.slice(percentile5).reduce((sum, val) => sum + val, 0) / (values.length - percentile5);
+      }
+      return depthData[y * width + x];
     },
     []
   );
@@ -125,21 +141,13 @@ export function useObstacleDetector(config: Partial<DetectionConfig> = {}) {
         try {
           switch (obstacle.zone) {
             case "critical":
-              // Vibración fuerte y repetida
-              await Haptics.notificationAsync(
-                Haptics.NotificationFeedbackType.Error
-              );
+              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
               setTimeout(() => {
-                Haptics.notificationAsync(
-                  Haptics.NotificationFeedbackType.Error
-                ).catch(() => {});
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
               }, 200);
               break;
             case "danger":
-              // Vibración moderada
-              await Haptics.notificationAsync(
-                Haptics.NotificationFeedbackType.Warning
-              );
+              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
               break;
           }
         } catch (err) {
@@ -147,157 +155,156 @@ export function useObstacleDetector(config: Partial<DetectionConfig> = {}) {
         }
       }
 
-      if (fullConfig.enableVoice) {
-        const message = getVoiceMessage(obstacle);
-        if (message) {
-          Speech.stop();
-          const rate = obstacle.zone === "critical" ? 1.2 : 1.0;
-          Speech.speak(message, {
-            language: "es-CL",
-            rate,
-            pitch: obstacle.zone === "critical" ? 1.2 : 1.0,
-          });
-        }
-      }
-
       setTimeout(() => setIsAlerting(false), 500);
     },
-    [fullConfig, getVoiceMessage]
+    [fullConfig]
   );
 
-  /**
-   * 🔧 CLAVE: Solo analiza la FRANJA HORIZONTAL central
-   * Ignora píxeles de arriba y abajo que causan falsos positivos
-   */
   const analyzeDepthMap = useCallback(
     async (
       depthData: Float32Array | number[],
       width: number,
-      height: number
+      height: number,
+      yoloDetections: YoloDetection[]
     ): Promise<ObstacleInfo | null> => {
-      // 🔧 SOLUCIÓN DEFINITIVA: Usar TODA la imagen verticalmente (100%)
-      // No ignorar nada - MiDaS necesita toda la información
-      const stripStartY = 0;           // Desde el inicio
-      const stripEndY = height;        // Hasta el final
-      const stripHeight = height;      // 100% de altura
+      const stripStartY = 0;
+      const stripEndY = height;
+      const stripHeight = height;
 
-      // 🔧 NUEVO: Buscar el mínimo GLOBAL dentro de la franja horizontal
       let globalMinInStrip = Infinity;
-      let globalMinX = 0;
-      let globalMinY = 0;
+      let globalMaxInStrip = -Infinity;
+      let globalMaxX = 0; // Changed to track max position
+      let globalMaxY = 0;
+      let analyzedPixels = 0;
 
-      for (let y = stripStartY; y < stripEndY; y++) {
-        for (let x = 0; x < width; x++) {
-          const idx = y * width + x;
-          if (idx < depthData.length) {
-            const val = depthData[idx];
-            if (val < globalMinInStrip) {
-              globalMinInStrip = val;
-              globalMinX = x;
-              globalMinY = y;
+      let topDetection: YoloDetection | null = null;
+      if (yoloDetections.length > 0) {
+        topDetection = yoloDetections.reduce((prev, curr) =>
+          curr.confidence > prev.confidence ? curr : prev
+        );
+      }
+
+      const scaleX = width / 640;
+      const scaleY = height / 640;
+
+      // Calcular píxeles afectados para cobertura ANTES de getZone
+      let affectedPixels = 0;
+      let totalPixelsInStrip = 0;
+      const dangerThreshold = fullConfig.dangerThreshold;
+
+      if (topDetection) {
+        const margin = 0.1;
+        const x1 = Math.floor((topDetection.bbox.x + topDetection.bbox.width * margin) * scaleX);
+        const y1 = Math.floor((topDetection.bbox.y + topDetection.bbox.height * margin) * scaleY);
+        const x2 = Math.floor((topDetection.bbox.x + topDetection.bbox.width * (1 - margin)) * scaleX);
+        const y2 = Math.floor((topDetection.bbox.y + topDetection.bbox.height * (1 - margin)) * scaleY);
+
+        console.log(`🔍 Analizando bbox de ${topDetection.className} (${(topDetection.confidence * 100).toFixed(1)}%)`);
+
+        for (let y = Math.max(stripStartY, y1); y < Math.min(stripEndY, y2); y++) {
+          for (let x = Math.max(0, x1); x < Math.min(width, x2); x++) {
+            const idx = y * width + x;
+            if (idx < depthData.length) {
+              const val = depthData[idx];
+              analyzedPixels++;
+              totalPixelsInStrip++;
+              // Inverted: count as affected if > threshold (higher = closer)
+              if (val > dangerThreshold) {
+                affectedPixels++;
+              }
+              if (val < globalMinInStrip) {
+                globalMinInStrip = val;
+              }
+              if (val > globalMaxInStrip) {
+                globalMaxInStrip = val;
+                globalMaxX = x;
+                globalMaxY = y;
+              }
+            }
+          }
+        }
+        console.log(`🔍 Analizados ${analyzedPixels} píxeles dentro de bbox de ${topDetection.className}`);
+      } else {
+        console.log(`⚠️ No hay detecciones YOLO - Analizando toda la imagen`);
+        for (let y = stripStartY; y < stripEndY; y++) {
+          for (let x = 0; x < width; x++) {
+            const idx = y * width + x;
+            if (idx < depthData.length) {
+              const val = depthData[idx];
+              analyzedPixels++;
+              totalPixelsInStrip++;
+              // Inverted: count as affected if > threshold (higher = closer)
+              if (val > dangerThreshold) {
+                affectedPixels++;
+              }
+              if (val < globalMinInStrip) {
+                globalMinInStrip = val;
+              }
+              if (val > globalMaxInStrip) {
+                globalMaxInStrip = val;
+                globalMaxX = x;
+                globalMaxY = y;
+              }
             }
           }
         }
       }
 
-      // Determinar en qué región está el píxel más cercano
+      if (globalMaxInStrip === -Infinity) { // Changed check to max
+        console.log(`⚠️ No se encontraron píxeles válidos`);
+        return null;
+      }
+
+      const percentage = totalPixelsInStrip > 0 ? (affectedPixels / totalPixelsInStrip) * 100 : 0;
+
       let position: "center" | "left" | "right";
       const thirdWidth = Math.floor(width / 3);
-      
-      if (globalMinX < thirdWidth) {
+      // Changed to use globalMaxX for position (location of closest point)
+      if (globalMaxX < thirdWidth) {
         position = "left";
-      } else if (globalMinX < thirdWidth * 2) {
+      } else if (globalMaxX < thirdWidth * 2) {
         position = "center";
       } else {
         position = "right";
       }
 
-      // Analizar las 3 regiones para obtener promedios (para información adicional)
-      const left = analyzeRegion(
-        depthData,
-        width,
-        height,
-        0,
-        stripStartY,
-        thirdWidth,
-        stripEndY
-      );
+      const left = analyzeRegion(depthData, width, height, 0, stripStartY, thirdWidth, stripEndY);
+      const center = analyzeRegion(depthData, width, height, thirdWidth, stripStartY, thirdWidth * 2, stripEndY);
+      const right = analyzeRegion(depthData, width, height, thirdWidth * 2, stripStartY, width, stripEndY);
 
-      const center = analyzeRegion(
-        depthData,
-        width,
-        height,
-        thirdWidth,
-        stripStartY,
-        thirdWidth * 2,
-        stripEndY
-      );
+      const regionAvg = position === "left" ? left.avg : position === "center" ? center.avg : right.avg;
 
-      const right = analyzeRegion(
-        depthData,
-        width,
-        height,
-        thirdWidth * 2,
-        stripStartY,
-        width,
-        stripEndY
-      );
+      // Changed to robustMax
+      const robustMax = getRobustMax(depthData, width, height, globalMaxX, globalMaxY);
 
-      // Obtener el promedio de la región donde está el obstáculo más cercano
-      const regionAvg = position === "left" ? left.avg :
-                        position === "center" ? center.avg :
-                        right.avg;
-
-      // 🔧 CRÍTICO: Usar el mínimo GLOBAL de la franja para determinar zona
-      const zone = getZone(globalMinInStrip);
-      
-      // Calcular porcentaje de píxeles en zona de peligro (solo en franja)
-      const dangerThreshold = fullConfig.dangerThreshold;
-      let affectedPixels = 0;
-      let totalPixelsInStrip = 0;
-
-      // Solo contar píxeles dentro de la franja horizontal
-      for (let y = stripStartY; y < stripEndY; y++) {
-        for (let x = 0; x < width; x++) {
-          const idx = y * width + x;
-          if (idx < depthData.length) {
-            totalPixelsInStrip++;
-            if (depthData[idx] < dangerThreshold) {
-              affectedPixels++;
-            }
-          }
-        }
-      }
-
-      const percentage = totalPixelsInStrip > 0 
-        ? (affectedPixels / totalPixelsInStrip) * 100 
-        : 0;
+      // Pass min/max correctly (min=far, max=close)
+      const zone = getZone(robustMax, globalMinInStrip, globalMaxInStrip, percentage);
 
       const obstacle: ObstacleInfo = {
         zone,
-        distance: regionAvg,
-        closestDistance: globalMinInStrip,  // Ahora es el mínimo REAL de la franja
+        distance: robustMax, // Changed to robustMax
+        closestDistance: robustMax, // Changed to robustMax
         position,
         percentage,
       };
 
       setCurrentObstacle(obstacle);
 
-      // Alertar en zonas peligrosas
-      if (zone === "critical") {
+      if (zone === "critical" || zone === "danger") {
         await triggerAlert(obstacle);
       }
 
-      // 🔧 DEBUG: Ahora muestra el mínimo REAL de la franja
+      // Updated log labels for clarity (max franja instead of min)
       console.log(
         `🎯 ${zone.toUpperCase()} | Min franja: ${globalMinInStrip.toFixed(0)} | ` +
+        `Max franja: ${globalMaxInStrip.toFixed(0)} | Robust max: ${robustMax.toFixed(0)} | ` +
         `Avg región: ${regionAvg.toFixed(0)} | Pos: ${position} | ` +
         `Cobertura: ${percentage.toFixed(1)}%`
       );
 
       return obstacle;
     },
-    [analyzeRegion, getZone, triggerAlert, fullConfig]
+    [analyzeRegion, getZone, triggerAlert, fullConfig, getRobustMax] // Updated dependency
   );
 
   const resetAlerts = useCallback(() => {
