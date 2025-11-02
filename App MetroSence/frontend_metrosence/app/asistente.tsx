@@ -61,6 +61,7 @@ export default function AssistantScreen() {
   const cameraRef = useRef<CameraView>(null);
   const scanIntervalRef = useRef<number | null>(null);
   const errorCountRef = useRef<number>(0);
+  const shouldStopScanningRef = useRef<boolean>(false);
 
   const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -100,15 +101,22 @@ export default function AssistantScreen() {
     console.log(`📏 Camera container: ${width}x${height}`);
   };
 
-  const { speakThenListen } = useVoiceCapture({
+  const { speakThenListen, start: startListening, stop: stopListening, isListening } = useVoiceCapture({
     lang: "es-CL",
     onFinalText: async (finalText) => {
       const intent = intentFromSpeech(finalText);
+      console.log("🎤 Texto reconocido:", finalText);
+      console.log("🎯 Intención detectada:", intent);
       
       if (intent === "accept") {
         const res = await requestPermission();
         if (res?.granted) {
-          Speech.speak("Permiso concedido. Di iniciar para comenzar la detección.");
+          Speech.speak("Permiso concedido. Di iniciar para comenzar la detección.", {
+            language: "es",
+            onDone: () => {
+              setTimeout(() => startListening(), 500);
+            }
+          });
         } else {
           speakThenListen(
             "No se concedió el permiso. ¿Deseas intentarlo otra vez?"
@@ -118,8 +126,54 @@ export default function AssistantScreen() {
       }
       
       if (intent === "start") {
+        console.log("🎤 Comando 'iniciar' detectado");
+        if (!granted) {
+          Speech.speak("Primero necesito permisos de cámara. Di permitir para conceder.", { 
+            language: "es",
+            onDone: () => {
+              setTimeout(() => startListening(), 500);
+            }
+          });
+          return;
+        }
+        if (midasLoading || yoloLoading) {
+          Speech.speak("Los modelos aún están cargando. Espera un momento.", { 
+            language: "es",
+            onDone: () => {
+              setTimeout(() => startListening(), 500);
+            }
+          });
+          return;
+        }
+        if (midasError || yoloError) {
+          Speech.speak("Hay un error con los modelos. No puedo iniciar.", { 
+            language: "es",
+            onDone: () => {
+              setTimeout(() => startListening(), 500);
+            }
+          });
+          return;
+        }
+        if (!isCameraReady) {
+          Speech.speak("La cámara aún no está lista. Espera un momento.", { 
+            language: "es",
+            onDone: () => {
+              setTimeout(() => startListening(), 500);
+            }
+          });
+          return;
+        }
         if (!isScanning) {
+          console.log("▶️ Iniciando detección por comando de voz...");
           startScanning();
+          // No reiniciar la escucha aquí, se detendrá durante el escaneo
+        } else {
+          Speech.speak("La detección ya está en curso.", { 
+            language: "es",
+            onDone: () => {
+              setTimeout(() => startListening(), 500);
+            }
+          });
         }
         return;
       }
@@ -127,6 +181,19 @@ export default function AssistantScreen() {
       if (intent === "stop") {
         if (isScanning) {
           stopScanning();
+          Speech.speak("Detección detenida.", { 
+            language: "es",
+            onDone: () => {
+              setTimeout(() => startListening(), 500);
+            }
+          });
+        } else {
+          Speech.speak("No hay detección activa.", { 
+            language: "es",
+            onDone: () => {
+              setTimeout(() => startListening(), 500);
+            }
+          });
         }
         return;
       }
@@ -140,6 +207,12 @@ export default function AssistantScreen() {
       if (intent === "deny") {
         speakThenListen("Entendido. Puedes decir volver para regresar.");
         return;
+      }
+      
+      // Si no se reconoció ningún comando válido, reiniciar escucha
+      if (intent === "none" && finalText.trim()) {
+        console.log("⚠️ No se reconoció comando. Reiniciando escucha...");
+        setTimeout(() => startListening(), 500);
       }
     },
   });
@@ -166,6 +239,12 @@ export default function AssistantScreen() {
   };
 
   const scanForObstacles = async () => {
+    // Verificar si debemos detener antes de continuar
+    if (shouldStopScanningRef.current) {
+      console.log("⏹️ Escaneo cancelado por detección de andén");
+      return;
+    }
+    
     try {
       const cam = cameraRef.current;
       if (!cam || !isCameraReady) return;
@@ -197,6 +276,38 @@ export default function AssistantScreen() {
           objects.forEach((obj, idx) => {
             console.log(`   ${idx + 1}. ${obj.className} (${(obj.confidence * 100).toFixed(1)}%)`);
           });
+          
+          // Verificar si se detectó un Andén
+          const andenDetected = objects.find(obj => 
+            obj.className.toLowerCase() === "anden" && obj.confidence > 0.5
+          );
+          
+          if (andenDetected) {
+            console.log("🎯 ¡Andén detectado! Finalizando detección...");
+            
+            // Establecer flag para detener inmediatamente
+            shouldStopScanningRef.current = true;
+            
+            // Detener el intervalo inmediatamente
+            if (scanIntervalRef.current) {
+              clearInterval(scanIntervalRef.current);
+              scanIntervalRef.current = null;
+            }
+            
+            // Actualizar estado
+            setIsScanning(false);
+            setDetectedObjects([]);
+            
+            // Reproducir mensaje y reiniciar escucha
+            Speech.speak(
+              `Has llegado a tu destino. Se detectó el andén con ${(andenDetected.confidence * 100).toFixed(0)}% de confianza. Detección finalizada.`,
+              { 
+                language: "es"
+              }
+            );
+            console.log("✅ Detección finalizada. Escucha de voz NO se reiniciará.");
+            return; // Salir de la función para evitar continuar procesando
+          }
         }
       } catch (yoloErr) {
         console.error("❌ Error en YOLO:", yoloErr);
@@ -239,6 +350,14 @@ export default function AssistantScreen() {
     resetAlerts();
     setDetectedObjects([]);
     errorCountRef.current = 0;
+    shouldStopScanningRef.current = false; // Resetear la flag
+    
+    // Detener la escucha de voz durante el escaneo
+    if (isListening) {
+      console.log("🎤 Deteniendo escucha durante escaneo...");
+      stopListening();
+    }
+    
     Speech.speak("Detección iniciada. Explorando el entorno.", { language: "es" });
 
     scanIntervalRef.current = setInterval(scanForObstacles, 6000);
@@ -247,9 +366,19 @@ export default function AssistantScreen() {
   const stopScanning = () => {
     if (!isScanning) return;
     
+    shouldStopScanningRef.current = true; // Establecer flag
     setIsScanning(false);
     setDetectedObjects([]);
-    Speech.speak("Detección detenida.", { language: "es" });
+    Speech.speak("Detección detenida.", { 
+      language: "es",
+      onDone: () => {
+        // Reiniciar la escucha después de detener
+        setTimeout(() => {
+          console.log("🎤 Reiniciando escucha después de detener...");
+          startListening();
+        }, 500);
+      }
+    });
     
     if (scanIntervalRef.current) {
       clearInterval(scanIntervalRef.current);
@@ -268,7 +397,16 @@ export default function AssistantScreen() {
   useEffect(() => {
     if (!permission) return;
     if (granted) {
-      Speech.speak("Cámara lista. Di iniciar para comenzar la detección.", { language: "es" });
+      Speech.speak("Cámara lista. Di iniciar para comenzar la detección.", { 
+        language: "es",
+        onDone: () => {
+          // Iniciar escucha de voz después del mensaje
+          setTimeout(() => {
+            console.log("🎤 Iniciando escucha de voz automáticamente...");
+            startListening();
+          }, 500);
+        }
+      });
     } else {
       speakThenListen(
         "Para continuar necesito tu permiso para usar la cámara. Di permitir para conceder."
@@ -382,7 +520,7 @@ export default function AssistantScreen() {
             {/* Bounding boxes de YOLO (máximo 3, ordenados por confianza) */}
             {[...detectedObjects]
               .sort((a, b) => b.confidence - a.confidence) // Ordenar por confianza descendente
-              .slice(0, 3) // Tomar solo los primeros 3
+              .slice(0, 10) // Tomar solo los primeros 3
               .map((obj, index) => {
                 const scaledBbox = scaleBoundingBox(obj.bbox);
                 const borderColor = obj.confidence > 0.7 ? "#3b82f6" : "#ef4444";
@@ -465,6 +603,13 @@ export default function AssistantScreen() {
           <View style={styles.scanningIndicator}>
             <View style={styles.pulse} />
             <Text style={styles.scanningText}>Escaneando...</Text>
+          </View>
+        )}
+        
+        {!isScanning && isListening && (
+          <View style={styles.listeningIndicator}>
+            <View style={styles.micPulse} />
+            <Text style={styles.listeningText}>🎤 Escuchando comandos...</Text>
           </View>
         )}
       </View>
@@ -628,6 +773,27 @@ const styles = StyleSheet.create({
   },
   scanningText: {
     color: "#10b981",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  listeningIndicator: {
+    marginTop: 16,
+    alignItems: "center",
+    backgroundColor: "rgba(59, 130, 246, 0.1)",
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(59, 130, 246, 0.3)",
+  },
+  micPulse: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#3b82f6",
+    marginBottom: 8,
+  },
+  listeningText: {
+    color: "#3b82f6",
     fontSize: 12,
     fontWeight: "600",
   },
