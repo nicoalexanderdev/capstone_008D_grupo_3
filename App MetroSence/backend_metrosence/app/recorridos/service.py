@@ -12,6 +12,9 @@ def get_recorridos(db: Session, skip: int = 0, limit: int = 100):
 def get_recorrido(db: Session, recorrido_id: int):
     return db.query(RecorridoEntity).filter(RecorridoEntity.id_recorrido == recorrido_id).first()
 
+def get_recorrido_por_acceso(db:Session, acceso_id: int, sentido_id: int):
+    return db.query(RecorridoEntity).filter(RecorridoEntity.acceso_id == acceso_id, RecorridoEntity.sentido_id == sentido_id).first()
+
 def get_recorrido_por_parametros(db: Session, estacion_id: int, acceso_id: int, direccion_id: int):
     return (
         db.query(RecorridoEntity)
