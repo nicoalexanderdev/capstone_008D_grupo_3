@@ -7,40 +7,62 @@ import * as Speech from "expo-speech";
 import { useLocalSearchParams, router } from "expo-router";
 import { getRecorrido } from "../lib/indicaciones"; 
 
+const first = (v?: string | string[]) => Array.isArray(v) ? v[0] : v;
+const toNum = (v?: string | string[]) => {
+  const s = first(v);
+  if (s == null) return undefined;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : undefined;
+};
+
 export default function IndicacionesMapa() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [oraciones, setOraciones] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { accessId, sentidoId } = useLocalSearchParams();
+  const params = useLocalSearchParams<{
+    accessId?: string | string[];
+    accesoId?: string | string[];  // ← fallback por si quedó el nombre antiguo
+    sentidoId?: string | string[];
+    idAcceso?: string | string[];  // ← otro alias posible
+  }>();
 
-  const toNum = (val?: string | string[]) => {
-  const s = Array.isArray(val) ? val[0] : val;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : undefined;
-};
+const accessIdNum =
+    toNum(params.accessId) ??
+    toNum(params.accesoId) ??
+    toNum(params.idAcceso);
 
-const accessIdNum = toNum(accessId);
-const sentidoIdNum = toNum(sentidoId);
+  const sentidoIdNum = toNum(params.sentidoId);
 
-  useEffect(() => {
-    cargarRecorrido();
-  }, []);
+    useEffect(() => {
+    (async () => {
+      try {
+        setLoading(true);
 
-  const cargarRecorrido = async () => {
-    try {
-      setLoading(true);
-      const data = await getRecorrido(sentidoIdNum, accessIdNum);
-      setOraciones(data);
-      setError(null);
-    } catch (err) {
-      console.error("Error al cargar recorrido:", err);
-      setError("No se pudieron cargar las indicaciones");
-    } finally {
-      setLoading(false);
-    }
-  };
+        // LOGS ÚTILES PARA DEPURAR
+        console.log("Indicaciones params crudos:", params);
+        console.log("Normalizados:", { accessIdNum, sentidoIdNum });
+
+        if (accessIdNum == null || sentidoIdNum == null) {
+          setError("Parámetros incompletos (accessId/sentidoId).");
+          setOraciones([]);
+          return;
+        }
+
+        // ⚠️ ORDEN CORRECTO: (accessId, sentidoId)
+        const data = await getRecorrido(accessIdNum, sentidoIdNum);
+        setOraciones(data);
+        setError(null);
+      } catch (e) {
+        console.error("Error al cargar recorrido:", e);
+        setError("No se pudieron cargar las indicaciones");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  // IMPORTANTE: depende de los números ya normalizados
+  }, [accessIdNum, sentidoIdNum]);
 
   return (
     <View className="flex-1 bg-neutral-900">

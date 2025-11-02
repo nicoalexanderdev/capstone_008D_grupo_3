@@ -121,7 +121,7 @@ export default function AccessScreen() {
         letra: letra,
         access: accessName,
         direction: estacionTerminalName,
-        accessId: id,
+        accessId: String(id),
         sentidoId: String(sentidoId)
       },
     });

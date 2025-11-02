@@ -100,6 +100,7 @@ async function handleSentidoPressTap(sentido: SentidoType) {
       lineId: sentido.linea_id,
       lineName,
       estacionTerminalName: sentido.estacion.name,
+      sentidoId: String(sentido.id_sentido),
       autoVoice: "0", // ← si vino por tap, NO auto-hables/escuches
     },
   });

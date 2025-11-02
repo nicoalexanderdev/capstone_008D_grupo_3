@@ -57,10 +57,18 @@ export default function ConfirmacionScreen() {
     Speech.stop();
     router.push("/asistente");
   }
+  
+  const first = (v?: string | string[]) => Array.isArray(v) ? v[0] : v;
 
   function goIndicaciones() {
-    Speech.stop();
-    router.push({ pathname: "/indicaciones", params: { sentidoId: String(sentidoId), accessId: String(accessId) }});
+  Speech.stop();
+  const sid = first(sentidoId);
+  const aid = first(accessId);
+
+  router.push({
+    pathname: "/indicaciones",
+    params: { sentidoId: String(sid ?? ""), accessId: String(aid ?? "") },
+  });
   }
 
   return (
