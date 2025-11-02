@@ -7,7 +7,7 @@ from ultralytics import YOLO
 import torch
 
 def train_yolo11n(
-    data_yaml="dataset_yolo/data.yaml",
+    data_yaml="dataset_yolo_balanced_final/data.yaml",
     epochs=100,
     imgsz=640,
     batch=16,
@@ -104,7 +104,7 @@ def test_model(model_path, data_yaml):
 if __name__ == "__main__":
     
     # CONFIGURACIÓN - Ajusta estos parámetros
-    DATA_YAML = "dataset_yolo/data.yaml"  # Ruta a tu data.yaml
+    DATA_YAML = "dataset_yolo_balanced_final/data.yaml"  # Ruta a tu data.yaml
     EPOCHS = 50                           # Número de épocas
     IMGSZ = 640                            # Tamaño de imagen
     BATCH = 8                             # Ajusta según tu GPU
