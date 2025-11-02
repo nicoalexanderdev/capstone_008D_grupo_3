@@ -1,4 +1,4 @@
-// hooks/useYoloModel.ts
+// hooks/useYoloModel.ts - VERSIÓN CORREGIDA
 import { useCallback, useEffect, useState } from "react";
 import * as ImageManipulator from "expo-image-manipulator";
 import { useRemoteTFLiteModel } from "./useRemoteTFLiteModel";
@@ -8,20 +8,20 @@ if (typeof global.Buffer === 'undefined') {
 }
 import * as jpeg from 'jpeg-js'
 
-// Clases COCO que YOLO puede detectar (80 clases)
-const COCO_CLASSES = [
-  "persona", "bicicleta", "auto", "moto", "avión", "bus", "tren", "camión",
-  "bote", "semáforo", "hidrante", "señal de stop", "parquímetro", "banca",
-  "pájaro", "gato", "perro", "caballo", "oveja", "vaca", "elefante", "oso",
-  "cebra", "jirafa", "mochila", "paraguas", "cartera", "corbata", "maleta",
-  "frisbee", "esquís", "tabla de snow", "pelota", "cometa", "bate de béisbol",
-  "guante de béisbol", "patineta", "tabla de surf", "raqueta de tenis", "botella",
-  "copa de vino", "taza", "tenedor", "cuchillo", "cuchara", "bowl", "banana",
-  "manzana", "sándwich", "naranja", "brócoli", "zanahoria", "hot dog", "pizza",
-  "dona", "pastel", "silla", "sofá", "planta en maceta", "cama", "mesa de comedor",
-  "inodoro", "TV", "laptop", "mouse", "control remoto", "teclado", "celular",
-  "microondas", "horno", "tostadora", "lavaplatos", "refrigerador", "libro",
-  "reloj", "jarrón", "tijeras", "oso de peluche", "secador de pelo", "cepillo de dientes"
+// ✅ CLASES PERSONALIZADAS DEL MODELO (10 clases)
+// CRÍTICO: Este orden DEBE coincidir EXACTAMENTE con el data.yaml usado en el entrenamiento
+// El modelo espera shape [1, 14, 8400] donde 14 = 4 (bbox) + 10 (clases)
+const CUSTOM_CLASSES = [
+  "Ascensor",      // 0
+  "Persona",       // 1
+  "Cajero",        // 2
+  "Totem",         // 3
+  "PagoBip",       // 4
+  "Advertencia",   // 5
+  "Escaleras",     // 6
+  "Asistente",     // 7
+  "Entrada",       // 8
+  "Anden"          // 9
 ];
 
 export type YoloDetection = {
@@ -98,7 +98,7 @@ async function imageToRGBFloat32(
   const buffer = Buffer.from(jpegBytes);
   console.log('Buffer creado:', buffer.length);
 
-  // Decodificar usando jpeg-js con opción useUint8Array
+  // Decodificar usando jpeg-js
   const rawImageData = jpeg.decode(buffer);
   console.log(`✅ Imagen decodificada: ${rawImageData.width}x${rawImageData.height}, ${rawImageData.data.length} bytes`);
 
@@ -171,9 +171,22 @@ function applyNMS(detections: YoloDetection[], iouThreshold: number): YoloDetect
 }
 
 /**
- * Procesa la salida del modelo YOLO11n
- * Formato YOLO11n: [1, 84, 8400] (features x detections)
- * Features: cx, cy, w, h (normalizados 0-1), then 80 class probs
+ * Procesa la salida del modelo YOLO PERSONALIZADO
+ * 
+ * ⚠️ IMPORTANTE: Tu modelo tiene shape [1, 14, 8400] NO [1, 84, 8400]
+ * 
+ * Formato: [1, num_features, num_detections]
+ * - num_features = 4 (bbox) + 10 (clases personalizadas) = 14
+ * - num_detections = 8400 (posiciones de anclas)
+ * 
+ * Sin embargo, tu log muestra [1, 16, 8400], lo que sugiere que:
+ * - Puede tener 2 features adicionales (objectness, padding, etc.)
+ * - O el modelo exportado tiene un formato ligeramente diferente
+ * 
+ * Features por detección:
+ * [0-3]: cx, cy, w, h (bbox normalizado 0-1)
+ * [4-13]: scores de las 10 clases personalizadas
+ * [14-15]: posiblemente objectness o padding (ignorar)
  */
 function processYoloOutput(
   output: Float32Array | number[],
@@ -184,13 +197,30 @@ function processYoloOutput(
 ): YoloDetection[] {
   const detections: YoloDetection[] = [];
   
-  const numClasses = 80;
+  // ✅ NÚMERO CORRECTO DE CLASES (10 personalizadas, NO 80 de COCO)
+  const numClasses = CUSTOM_CLASSES.length; // 10
   const numDetections = 8400;
   
-  console.log(`🔍 Formato YOLO: 84 features x ${numDetections} detecciones`);
+  // Detectar el número de features basándose en el tamaño del output
+  // Tu log muestra: 134400 elementos = output.length
+  // Si es [14, 8400] aplanado: 14 * 8400 = 117,600
+  // Si es [16, 8400] aplanado: 16 * 8400 = 134,400 ✅
+  const numFeatures = output.length / numDetections;
+  
+  console.log(`🔍 Formato YOLO: ${numFeatures} features x ${numDetections} detecciones`);
   console.log(`📊 Total elementos: ${output.length}`);
+  console.log(`🎯 Clases esperadas: ${numClasses} (${CUSTOM_CLASSES[0]}, ${CUSTOM_CLASSES[1]}, ...)`);
+
+  // Validación
+  if (output.length !== numFeatures * numDetections) {
+    console.error(`❌ Error: Tamaño de salida inesperado`);
+    console.error(`   Esperado: ${numFeatures} * ${numDetections} = ${numFeatures * numDetections}`);
+    console.error(`   Recibido: ${output.length}`);
+    return [];
+  }
 
   for (let i = 0; i < numDetections; i++) {
+    // Indices para bbox (siempre los primeros 4 features)
     const xIdx = i;
     const yIdx = numDetections + i;
     const wIdx = numDetections * 2 + i;
@@ -202,7 +232,7 @@ function processYoloOutput(
     const width = output[wIdx];
     const height = output[hIdx];
     
-    // Encontrar la clase con mayor score
+    // Encontrar la clase con mayor score (features 4 a 13, o 4 a numClasses+3)
     let maxScore = -Infinity;
     let maxClassId = -1;
     
@@ -216,7 +246,7 @@ function processYoloOutput(
       }
     }
     
-    if (maxScore >= confidenceThreshold && maxClassId >= 0) {
+    if (maxScore >= confidenceThreshold && maxClassId >= 0 && maxClassId < numClasses) {
       // Escalar a píxeles
       const bboxX = (centerX - width / 2) * imgWidth;
       const bboxY = (centerY - height / 2) * imgHeight;
@@ -224,7 +254,7 @@ function processYoloOutput(
       const bboxH = height * imgHeight;
       
       detections.push({
-        className: COCO_CLASSES[maxClassId] || `Clase ${maxClassId}`,
+        className: CUSTOM_CLASSES[maxClassId] || `Clase ${maxClassId}`,
         classId: maxClassId,
         confidence: maxScore,
         bbox: {
@@ -247,7 +277,7 @@ function processYoloOutput(
 }
 
 /**
- * Hook para YOLO11n - Estructura idéntica a useMidasModel
+ * Hook para YOLO personalizado - Estructura idéntica a useMidasModel
  */
 export function useYoloModel(
   modelUrl: string,
@@ -256,8 +286,7 @@ export function useYoloModel(
 ) {
   const { model, inputDims: rawInputDims, loading, error } = useRemoteTFLiteModel(modelUrl);
 
-  // CRÍTICO: YOLO11n espera 640x640, pero detectInputDims puede retornar valores incorrectos
-  // Forzamos las dimensiones correctas basadas en los inputs del modelo
+  // CRÍTICO: YOLO espera 640x640
   const [inputDims, setInputDims] = useState({ w: 640, h: 640 });
   const [isReady, setIsReady] = useState(false);
 
@@ -271,6 +300,7 @@ export function useYoloModel(
         setInputDims({ w, h });
         setIsReady(true);
         console.log(`✅ YOLO listo - Dimensiones: ${w}x${h}`);
+        console.log(`📋 Detectando ${CUSTOM_CLASSES.length} clases personalizadas`);
       }
     }
   }, [model, loading, error]);
@@ -382,6 +412,6 @@ export function useYoloModel(
     loading,
     error,
     detectObjects,
-    isReady, // Agregado para debugging
+    isReady,
   };
 }
