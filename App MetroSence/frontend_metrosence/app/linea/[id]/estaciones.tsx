@@ -21,7 +21,7 @@ import {
 import * as Speech from "expo-speech";
 
 export default function StationsScreen() {
-  const { lineId, lineName, estacionTerminalName } = useLocalSearchParams();
+  const { lineId, lineName, estacionTerminalName, sentidoId } = useLocalSearchParams();
 
   const id = lineId ? parseInt(lineId as string) : null;
 
@@ -135,6 +135,7 @@ export default function StationsScreen() {
         estacionTerminalName,
         estacionDestinoId: station.id_estacion,
         estacionDestinoName: station.name,
+        sentidoId: String(sentidoId)
       },
     });
   };

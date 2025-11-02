@@ -86,6 +86,7 @@ async function handleSentidoPressVoice(sentido: SentidoType) {
       lineId: sentido.linea_id,
       lineName,
       estacionTerminalName: sentido.estacion.name,
+      sentidoId: String(sentido.id_sentido)
       // NOTA: sin autoVoice -> la pantalla estaciones sí puede hablar/escuchar
     },
   });

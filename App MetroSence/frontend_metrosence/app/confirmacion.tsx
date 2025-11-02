@@ -13,12 +13,7 @@ import * as Speech from "expo-speech";
 import { useVoiceCapture } from "../hooks/useVoiceCapture";
 
 export default function ConfirmacionScreen() {
-  const { station, access, direction, letra } = useLocalSearchParams<{
-    station?: string;
-    access?: string;
-    direction?: string;
-    letra?: string;
-  }>();
+  const { station, access, direction, letra, sentidoId, accessId } = useLocalSearchParams();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [announced, setAnnounced] = useState(false);
@@ -63,6 +58,11 @@ export default function ConfirmacionScreen() {
     router.push("/asistente");
   }
 
+  function goIndicaciones() {
+    Speech.stop();
+    router.push({ pathname: "/indicaciones", params: { sentidoId: String(sentidoId), accessId: String(accessId) }});
+  }
+
   return (
     <View className="flex-1 bg-neutral-900">
       <Header onReportPress={() => router.push("/report")} />
@@ -99,15 +99,22 @@ export default function ConfirmacionScreen() {
           </Text>
         </View>
 
-        <View className="items-center mb-6">
+        <View className="items-center mb-3">
           <SecondaryButton
             label="INICIAR ASISTENTE VIRTUAL"
             onPress={goAsistente}
           />
         </View>
 
+        <View className="items-center mb-3">
+          <SecondaryButton
+            label="INICIAR INDICACIONES MAPA"
+            onPress={goIndicaciones}
+          />
+        </View>
+
         {/* Botón manual por si el usuario quiere reintentar */}
-        <View style={{ paddingVertical: 100 }}>
+        <View style={{ paddingVertical: 50 }}>
           <Pressable
             onPress={() => {
               if (isListening) {

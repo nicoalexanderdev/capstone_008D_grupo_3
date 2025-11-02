@@ -32,7 +32,7 @@ const formatTime = (timeString: string) => {
 };
 
 export default function AccessScreen() {
-  const { idParam, lineName, estacionDestinoName, estacionTerminalName } =
+  const { idParam, lineName, estacionDestinoName, estacionTerminalName, sentidoId } =
     useLocalSearchParams();
 
   const id = idParam ? parseInt(idParam as string) : null;
@@ -68,7 +68,7 @@ export default function AccessScreen() {
       }
       const match = matchAccessFromUtterance(finalText, detalle);
       if (match) {
-        goConfirm(match.direccion, match.letra);
+        goConfirm(match.direccion, match.letra, match.id_acceso);
       } else {
         Alert.alert(
           "No se reconoció el acceso",
@@ -112,7 +112,7 @@ export default function AccessScreen() {
     fetchDetalles();
   }, [id]);
 
-  const goConfirm = (accessName: string, letra: string) => {
+  const goConfirm = (accessName: string, letra: string, id: number) => {
     Speech.stop();
     router.push({
       pathname: "/confirmacion",
@@ -121,6 +121,8 @@ export default function AccessScreen() {
         letra: letra,
         access: accessName,
         direction: estacionTerminalName,
+        accessId: id,
+        sentidoId: String(sentidoId)
       },
     });
   };
@@ -187,7 +189,7 @@ export default function AccessScreen() {
             key={acceso.id_acceso} // Usar id_acceso como key único
             label={acceso.direccion}
             letter={acceso.letra}
-            onPress={() => goConfirm(acceso.direccion, acceso.letra)}
+            onPress={() => goConfirm(acceso.direccion, acceso.letra, acceso.id_acceso)}
             color={lineColorInfo.color}
             textColor={lineColorInfo.textColor}
           />
