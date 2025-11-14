@@ -9,7 +9,7 @@ import {
 import { BlurView } from "expo-blur";
 import type { MetroLine } from "../utils/voiceLinesMatch";
 import { getAllLines } from "../lib/lines";
-import * as Speech from 'expo-speech';
+import * as Speech from "expo-speech";
 
 export function LinesList({
   onSelect,
@@ -25,12 +25,14 @@ export function LinesList({
   const [lines, setLines] = useState<MetroLine[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     (async () => {
       try {
         const data = await getAllLines();
         setLines(data);
         onDataLoaded?.(data);
+
         if (data.length === 0) {
           Speech.speak("No se encontraron líneas de metro disponibles.");
         }
@@ -68,6 +70,7 @@ export function LinesList({
         tint="dark"
         style={isLargeScreen ? {} : { borderRadius: 16, overflow: "hidden" }}
       />
+
       <FlatList
         data={lines}
         keyExtractor={(item) => String(item.id_linea)}
@@ -76,6 +79,7 @@ export function LinesList({
         ItemSeparatorComponent={() => <View style={{ height: itemGap }} />}
         ListHeaderComponent={<View style={{ height: 2 }} />}
         ListFooterComponent={<View style={{ height: 2 }} />}
+
         renderItem={({ item }) => (
           <Pressable
             accessibilityRole="button"
@@ -83,7 +87,10 @@ export function LinesList({
             onPress={() => onSelect(item)}
             android_ripple={{ color: "rgba(255,255,255,0.15)" }}
             hitSlop={10}
-            className="h-12 rounded-2xl items-center justify-center shadow-lg"
+
+            // 🔥 AHORA ES IGUAL A LOS BOTONES DE SENTIDOS
+            className="w-full h-60 rounded-2xl items-center justify-center shadow-lg"
+
             style={{
               backgroundColor: (item as any).color,
               shadowColor: (item as any).color,
@@ -94,7 +101,7 @@ export function LinesList({
             }}
           >
             <Text
-              className="text-base font-extrabold text-center"
+              className="text-3xl font-extrabold text-center"
               style={{ color: (item as any).textColor || "#000" }}
               numberOfLines={1}
             >
