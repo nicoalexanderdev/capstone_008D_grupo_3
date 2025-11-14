@@ -88,7 +88,7 @@ export function LinesList({
             android_ripple={{ color: "rgba(255,255,255,0.15)" }}
             hitSlop={10}
 
-            // 🔥 AHORA ES IGUAL A LOS BOTONES DE SENTIDOS
+            // ⭐ MISMO TAMAÑO QUE SENTIDOS
             className="w-full h-60 rounded-2xl items-center justify-center shadow-lg"
 
             style={{

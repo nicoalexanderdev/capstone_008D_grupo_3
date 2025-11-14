@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -34,9 +34,11 @@ export function EstacionesList({
     (async () => {
       try {
         const data = await getEstacionesPorLinea(lineId, skip);
+
         setItems(data);
         const hasMore = data.length === 10;
         onDataLoaded?.(data, hasMore);
+
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unknown error");
       } finally {
@@ -68,15 +70,18 @@ export function EstacionesList({
       data={items}
       keyExtractor={(item) => String(item.id_estacion)}
       ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
+
       renderItem={({ item }) => (
         <Pressable
           onPress={() => onSelect(item)}
           android_ripple={{ color: "rgba(255,255,255,0.15)" }}
-          className="w-full h-30 rounded-2xl items-center justify-center shadow-lg"
+
+          // 🔥 BOTONES GRANDES IGUAL QUE LÍNEAS Y SENTIDOS
+          className="w-full h-60 rounded-2xl items-center justify-center shadow-lg"
           style={{ backgroundColor: cardColor }}
         >
           <Text
-            className="text-xl"
+            className="text-3xl font-bold"
             style={{ color: textColor }}
             numberOfLines={1}
           >
