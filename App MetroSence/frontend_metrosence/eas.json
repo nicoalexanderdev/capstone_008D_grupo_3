@@ -9,7 +9,12 @@
       "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api-metrosence.onrender.com/api/v1",
+        "EXPO_PUBLIC_TFLITE_MIDAS_URL": "https://api-metrosence.onrender.com/models/Midas-V2.tflite",
+        "EXPO_PUBLIC_TFLITE_YOLO_URL": "https://storage.googleapis.com/metrosence_bucket/best_float32.tflite"
+      }
     },
     "production": {
       "autoIncrement": true
