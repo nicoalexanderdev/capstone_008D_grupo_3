@@ -16,13 +16,17 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Necesitamos tu micrófono para reconocer tu voz."
+        "NSMicrophoneUsageDescription": "MetroSence necesita usar el micrófono.",
+        "NSSpeechRecognitionUsageDescription": "MetroSence quiere usar reconocimiento de voz.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "icon": {
         "dark": "./assets/images/ios-dark.png",
         "light": "./assets/images/ios-light.png",
         "tinted": "./assets/images/ios-tinted.png"
-      }
+      },
+      "bundleIdentifier": "com.metrosence.app",
+      "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
@@ -44,11 +48,13 @@
     "plugins": [
       "expo-router",
       [
-        "expo-speech-recognition", 
+        "expo-speech-recognition",
         {
           "microphonePermission": "MetroSence necesita usar el micrófono.",
           "speechRecognitionPermission": "MetroSence quiere usar reconocimiento de voz.",
-          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
         }
       ],
       [
