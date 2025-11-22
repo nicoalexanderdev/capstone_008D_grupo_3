@@ -21,11 +21,11 @@ export default function AccessButton({
       
       {/* 🔵 Círculo de la letra — ahora grande para calzar con h-60 */}
       <View
-        className="rounded-full h-24 w-24 justify-center items-center shadow-lg mr-4"
+        className="rounded-full h-20 w-20 justify-center items-center mr-4"
         style={{ backgroundColor: color }}
       >
         <Text
-          className="font-extrabold text-4xl"
+          className="font-bold text-3xl"
           style={{ color: textColor }}
         >
           {letter}
@@ -36,15 +36,14 @@ export default function AccessButton({
       <Pressable
         onPress={onPress}
         android_ripple={{ color: "rgba(255,255,255,0.15)" }}
-        className="rounded-2xl flex-1 h-60 items-center justify-center shadow-lg"
+        className="rounded-2xl flex-1 h-32 items-center justify-center"
         style={{ backgroundColor: color }}
         accessibilityRole="button"
         accessibilityLabel={`Acceso ${label}`}
       >
         <Text
-          className="font-extrabold text-3xl text-center"
+          className="font-bold text-xl wrap-break-word text-center"
           style={{ color: textColor }}
-          numberOfLines={1}
         >
           {label}
         </Text>

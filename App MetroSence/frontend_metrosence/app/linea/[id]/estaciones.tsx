@@ -86,10 +86,10 @@ export default function StationsScreen() {
         if (match) {
           handleStationPress(match);
         } else {
-          Alert.alert(
-            "No se reconoció la estación",
-            'Di, por ejemplo: "Universidad de Chile" o "Hacia Ñuble". También puedes decir "atrás" para volver.'
-          );
+          // Alert.alert(
+          //   "No se reconoció la estación"
+          // );
+          Speech.speak("No se reconoció la estación");
         }
       },
     });

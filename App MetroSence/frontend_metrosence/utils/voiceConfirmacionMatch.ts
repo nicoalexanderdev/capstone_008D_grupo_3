@@ -1,3 +1,4 @@
+// utils/voiceConfirmacionMatch.ts
 function normalize(s: string) {
   return (s || "")
     .toLowerCase()
@@ -25,5 +26,17 @@ export function isStartAssistant(text: string) {
   return (
     /\b(iniciar|confirmar|continuar|siguiente|siguientes|comenzar|aceptar|ok|avanzar)\b/.test(t) ||
     t.includes("asistente")
+  );
+}
+
+export function isIndicacionesMapa(text: string) {
+  const t = normalize(text);
+  return (
+    t.includes("indicaciones") ||
+    t.includes("mapa") ||
+    t.includes("indicacion") ||
+    t.includes("ruta") ||
+    t.includes("como llegar") ||
+    t.includes("direccion")
   );
 }

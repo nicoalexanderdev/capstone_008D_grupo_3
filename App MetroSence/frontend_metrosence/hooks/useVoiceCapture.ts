@@ -62,7 +62,8 @@ export function useVoiceCapture(options?: VoiceCaptureOptions) {
   useSpeechRecognitionEvent("error", (e) => {
     console.log("SR error:", e.error, e.message);
     setIsListening(false);
-    Alert.alert("Error de voz", e.message ?? "Fallo en reconocimiento");
+    //Alert.alert("Error de voz", e.message ?? "Fallo en reconocimiento");
+    Speech.speak("Error en la captura de voz");
   });
 
   async function start() {

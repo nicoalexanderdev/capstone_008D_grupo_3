@@ -9,11 +9,11 @@ export default function SecondaryButton({ label, onPress }: Props) {
       <Pressable
         onPress={onPress}
         android_ripple={{ color: "rgba(0,0,0,0.1)" }}
-        className="bg-neutral-400 rounded-2xl w-full h-60 items-center justify-center shadow-lg"
+        className="bg-neutral-400 rounded-2xl w-full h-20 items-center justify-center"
         accessibilityRole="button"
         accessibilityLabel={label}
       >
-        <Text className="text-white font-extrabold text-3xl text-center" numberOfLines={1}>
+        <Text className="text-white font-bold text-lg text-center" numberOfLines={1}>
           {label}
         </Text>
       </Pressable>

@@ -335,10 +335,10 @@ export default function AssistantScreen() {
       if (errorCountRef.current > 3) {
         stopScanning();
         Speech.speak("Se detuvo la detección por errores técnicos.");
-        Alert.alert(
-          "Error",
-          "Hubo problemas con la detección. Revisa la consola para más detalles."
-        );
+        // Alert.alert(
+        //   "Error",
+        //   "Hubo problemas con la detección. Revisa la consola para más detalles."
+        // );
       }
     }
   };

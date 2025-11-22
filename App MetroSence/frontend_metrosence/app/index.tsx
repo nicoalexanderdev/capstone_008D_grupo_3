@@ -27,22 +27,42 @@ export default function HomeScreen() {
   const ITEM_GAP = 30;
   const isLargeScreen = width > 768;
 
-  const {
-    isListening,
-    recognizedText,
-    start,
-    stop,
-    speakThenListen,
-    interruptTTSAndStart,
-  } = useVoiceCapture({
-    lang: "es-CL",
-    onFinalText: (finalText) => {
-      if (!finalText) return;
-      if (!cachedLines.length) return;
-      const match = matchLineFromUtterance(finalText, cachedLines);
-      if (match) handleLinePress(match);
-    },
-  });
+const {
+  isListening,
+  recognizedText,
+  start,
+  stop,
+  speakThenListen,
+  interruptTTSAndStart,
+} = useVoiceCapture({
+  lang: "es-CL",
+  onFinalText: (finalText) => {
+    if (!finalText || !cachedLines.length) return;
+
+    const match = matchLineFromUtterance(finalText, cachedLines);
+
+    if (match) {
+      // Línea reconocida correctamente → navega
+      handleLinePress(match);
+    } else {
+      // Línea NO reconocida → feedback por voz
+      Speech.speak(
+        "No se reconoció la línea. Por favor, repite el nombre de la línea que deseas.",
+        // {
+        //   language: "es-CL",
+        //   rate: 1.2,
+        //   onDone: () => {
+        //     // Vuelve a decir las líneas disponibles y escucha de nuevo
+        //     const lineNames = cachedLines.map((l) => l.name).join(", ");
+        //     speakThenListen(
+        //       `Líneas disponibles: ${lineNames}. Di el nombre de la línea que deseas seleccionar.`
+        //     );
+        //   },
+        // }
+      );
+    }
+  },
+});
 
   const [cachedLines, setCachedLines] = useState<MetroLine[]>([]);
 

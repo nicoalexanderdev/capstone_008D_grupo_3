@@ -70,10 +70,11 @@ export default function AccessScreen() {
       if (match) {
         goConfirm(match.direccion, match.letra, match.id_acceso);
       } else {
-        Alert.alert(
-          "No se reconoció el acceso",
-          'Di, por ejemplo: "Acceso A" o "Entrada Independencia". También puedes decir "atrás" para volver.'
-        );
+        // Alert.alert(
+        //   "No se reconoció el acceso",
+        //   'Di, por ejemplo: "Acceso A". También puedes decir "atrás" para volver.'
+        // );
+        Speech.speak( "No se reconoció el acceso");
       }
     },
   });
